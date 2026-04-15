@@ -1,4 +1,4 @@
-const { ChannelType } = require('discord.js');
+const { ChannelType, EmbedBuilder } = require('discord.js');
 const { getConfig } = require('../config/config');
 const firestore = require('../services/firestore');
 const {
@@ -22,6 +22,14 @@ async function handleAutoScrape(thread) {
   // Check if this is a show-and-tell forum
   const parentName = thread.parent.name.toLowerCase();
   if (!parentName.includes('show-and-tell')) return;
+
+  // Join the thread so the bot can send messages
+  try {
+    await thread.join();
+  } catch (err) {
+    console.error('Auto-scrape: failed to join thread:', err.message);
+    return;
+  }
 
   // Fetch starter message with retries (same pattern as forum.js)
   let starterMessage = null;
@@ -76,6 +84,7 @@ async function handleAutoScrape(thread) {
   }).filter(Boolean);
 
   let added = 0;
+  const addedRecipes = [];
 
   for (const url of urls) {
     const referCode = getPokeCode(url);
@@ -114,20 +123,62 @@ async function handleAutoScrape(thread) {
     }
 
     const saved = await firestore.saveRecipe(recipe);
-    added++;
+
+    // Only count genuinely new recipes (not duplicates caught by Firestore)
+    if (!saved.updated) {
+      added++;
+      addedRecipes.push(recipe);
+    }
 
     // Track for subsequent URLs in this same message
     existingUrls.add(normalizeUrl(url));
     if (referCode) existingCodes.add(referCode);
 
-    // Post approval embed if not auto-approving
-    if (!autoApprove && approvalChannel) {
+    // Post approval embed if not auto-approving (only for new recipes)
+    if (!autoApprove && approvalChannel && !saved.updated) {
       await postApprovalEmbed(approvalChannel, recipe, saved.id);
     }
   }
 
+  const skipped = urls.length - added;
   if (added > 0) {
-    console.log(`Auto-scrape: added ${added} recipe(s) from #${thread.parent.name} post "${thread.name}"`);
+    console.log(`Auto-scrape: added ${added} recipe(s), skipped ${skipped} duplicate(s) from #${thread.parent.name} post "${thread.name}"`);
+
+    // Notify the user in the thread
+    const statusText = autoApprove
+      ? 'automatically added to the recipe collection'
+      : 'submitted for approval';
+
+    const recipeLines = addedRecipes.slice(0, 5).map(r => {
+      const src = r.source ? ` \`${r.source}\`` : '';
+      return `- [${(r.title || 'Untitled').slice(0, 60)}](${r.url})${src}`;
+    });
+    if (addedRecipes.length > 5) {
+      recipeLines.push(`_...and ${addedRecipes.length - 5} more_`);
+    }
+
+    const description = (
+      `Found **${added}** recipe link${added !== 1 ? 's' : ''} in your post — ${statusText}.\n\n` +
+      recipeLines.join('\n')
+    ).slice(0, 4096);
+
+    const embed = new EmbedBuilder()
+      .setColor(autoApprove ? 0x2ecc71 : 0xf0c840)
+      .setTitle(autoApprove ? 'Recipes Added' : 'Recipes Submitted for Approval')
+      .setDescription(description)
+      .setFooter({ text: autoApprove ? 'Live on the recipe page now' : 'A moderator will review shortly' })
+      .setTimestamp();
+
+    try {
+      await thread.send({
+        embeds: [embed],
+        allowedMentions: { parse: [] },
+      });
+    } catch (err) {
+      console.error('Auto-scrape: failed to send notification in thread:', err.message);
+    }
+  } else if (skipped > 0) {
+    console.log(`Auto-scrape: all ${skipped} link(s) were duplicates from #${thread.parent.name} post "${thread.name}"`);
   }
 }
 
