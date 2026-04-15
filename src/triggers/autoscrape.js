@@ -151,8 +151,7 @@ async function handleAutoScrape(thread) {
 
     const recipeLines = addedRecipes.slice(0, 5).map(r => {
       const src = r.source ? ` \`${r.source}\`` : '';
-      const safeUrl = r.url.length > 200 ? r.url.slice(0, 200) : r.url;
-      return `- [${(r.title || 'Untitled').slice(0, 60)}](${safeUrl})${src}`;
+      return `- [${(r.title || 'Untitled').slice(0, 60)}](${r.url})${src}`;
     });
     if (addedRecipes.length > 5) {
       recipeLines.push(`_...and ${addedRecipes.length - 5} more_`);
@@ -171,7 +170,10 @@ async function handleAutoScrape(thread) {
       .setTimestamp();
 
     try {
-      await thread.send({ embeds: [embed] });
+      await thread.send({
+        embeds: [embed],
+        allowedMentions: { parse: [] },
+      });
     } catch (err) {
       console.error('Auto-scrape: failed to send notification in thread:', err.message);
     }
