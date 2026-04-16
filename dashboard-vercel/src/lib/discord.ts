@@ -56,7 +56,7 @@ export async function getDiscordUser(accessToken: string) {
 export async function getGuildMember(userId: string) {
   assertSnowflake(userId, "userId");
   const res = await fetch(
-    `${DISCORD_API}/guilds/${GUILD_ID}/members/${userId}`,
+    `${DISCORD_API}/guilds/${GUILD_ID}/members/${encodeURIComponent(userId)}`,
     { headers: botHeaders() }
   );
 
@@ -108,7 +108,7 @@ export async function getGuildChannels() {
 export async function banUser(userId: string, reason: string) {
   assertSnowflake(userId, "userId");
   const res = await fetch(
-    `${DISCORD_API}/guilds/${GUILD_ID}/bans/${userId}`,
+    `${DISCORD_API}/guilds/${GUILD_ID}/bans/${encodeURIComponent(userId)}`,
     {
       method: "PUT",
       headers: botHeaders(),
@@ -126,7 +126,7 @@ export async function banUser(userId: string, reason: string) {
 export async function kickUser(userId: string, reason: string) {
   assertSnowflake(userId, "userId");
   const res = await fetch(
-    `${DISCORD_API}/guilds/${GUILD_ID}/members/${userId}`,
+    `${DISCORD_API}/guilds/${GUILD_ID}/members/${encodeURIComponent(userId)}`,
     {
       method: "DELETE",
       headers: {
@@ -154,7 +154,7 @@ export async function timeoutUser(
 
   assertSnowflake(userId, "userId");
   const res = await fetch(
-    `${DISCORD_API}/guilds/${GUILD_ID}/members/${userId}`,
+    `${DISCORD_API}/guilds/${GUILD_ID}/members/${encodeURIComponent(userId)}`,
     {
       method: "PATCH",
       headers: {
@@ -175,7 +175,7 @@ export async function timeoutUser(
 export async function removeTimeout(userId: string) {
   assertSnowflake(userId, "userId");
   const res = await fetch(
-    `${DISCORD_API}/guilds/${GUILD_ID}/members/${userId}`,
+    `${DISCORD_API}/guilds/${GUILD_ID}/members/${encodeURIComponent(userId)}`,
     {
       method: "PATCH",
       headers: botHeaders(),

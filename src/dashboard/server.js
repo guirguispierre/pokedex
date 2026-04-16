@@ -63,11 +63,14 @@ function rateLimit(req, res, next) {
   next();
 }
 
+// Apply rate limiting globally to all routes
+app.use(rateLimit);
+
 // Serve static frontend
 app.use(express.static(path.join(__dirname, 'public')));
 
-// API: Get all recipes (public — no auth required, rate limited)
-app.get('/api/recipes', rateLimit, async (req, res) => {
+// API: Get all recipes (public — no auth required)
+app.get('/api/recipes', async (req, res) => {
   try {
     const { tag, source, limit: limitParam, search } = req.query;
     const safeLimit = Math.min(Math.max(parseInt(limitParam) || 200, 1), 500);
@@ -100,8 +103,8 @@ app.get('/api/recipes', rateLimit, async (req, res) => {
   }
 });
 
-// Apply auth and rate limiting to all API routes
-app.use('/api', rateLimit, apiAuth);
+// Apply auth to all remaining API routes (rate limiting is global)
+app.use('/api', apiAuth);
 
 // API: Get all issues
 app.get('/api/issues', async (req, res) => {
@@ -162,7 +165,7 @@ app.get('/api/issues/:id', async (req, res) => {
 });
 
 // Catch-all: serve frontend for SPA routing
-app.use(rateLimit, (req, res) => {
+app.use((req, res) => {
   const reqPath = req.path;
   // Serve recipes page for /recipes route
   if (reqPath === '/recipes' || reqPath === '/recipes/') {
