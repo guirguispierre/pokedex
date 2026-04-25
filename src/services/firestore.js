@@ -427,6 +427,54 @@ async function deleteRecipe(recipeId) {
   await db.collection('recipes').doc(recipeId).delete();
 }
 
+// --- Agent triage helpers ---
+
+async function setIssueLastEvaluatedAt(issueId, iso) {
+  await db.collection('issues').doc(issueId).update({ lastEvaluatedAt: iso });
+}
+
+async function updateIssueResolution(issueId, { resolvedBy, resolvedReason }) {
+  await db.collection('issues').doc(issueId).update({
+    status: 'resolved',
+    resolvedAt: new Date().toISOString(),
+    resolvedBy,
+    resolvedReason: resolvedReason || null,
+  });
+}
+
+async function searchOpenIssuesForAgent(_query, limit = 50) {
+  // Tool loads recent open issues; ranking happens in the tool via Jaccard.
+  // Firestore doesn't do text search natively; we return a working set.
+  const snapshot = await db.collection('issues')
+    .where('status', '==', 'open')
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function getGapByKey(normalizedKey) {
+  const snapshot = await db.collection('capability_gaps')
+    .where('normalizedKey', '==', normalizedKey)
+    .limit(1)
+    .get();
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() };
+}
+
+async function createGap(data) {
+  const docRef = await db.collection('capability_gaps').add({
+    ...data,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+async function updateGap(gapId, fields) {
+  await db.collection('capability_gaps').doc(gapId).update(fields);
+}
+
 // --- Feedback (public website) ---
 
 async function saveFeedback(feedbackData) {
@@ -492,4 +540,10 @@ module.exports = {
   deleteRecipe,
   saveFeedback,
   getPublishedFeedback,
+  setIssueLastEvaluatedAt,
+  updateIssueResolution,
+  searchOpenIssuesForAgent,
+  getGapByKey,
+  createGap,
+  updateGap,
 };
