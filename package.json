@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test test/**/*.test.js"
+    "test": "node --test 'test/**/*.test.js'",
+    "test:legacy": "vitest run tests/"
   },
   "keywords": [],
   "author": "",

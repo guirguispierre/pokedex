@@ -108,12 +108,15 @@ function fakeMessage({
 
 function fakeOpenRouterResponder(sequence) {
   // sequence: [{ tool_calls: [...] } | { content: '<json string>' } | Error]
+  // Returns an object shaped like the real openrouter module: { callWithTools }.
   let i = 0;
-  return async () => {
-    if (i >= sequence.length) throw new Error('responder exhausted');
-    const item = sequence[i++];
-    if (item instanceof Error) throw item;
-    return item;
+  return {
+    callWithTools: async () => {
+      if (i >= sequence.length) throw new Error('responder exhausted');
+      const item = sequence[i++];
+      if (item instanceof Error) throw item;
+      return item;
+    },
   };
 }
 
