@@ -433,6 +433,12 @@ async function setIssueLastEvaluatedAt(issueId, iso) {
   await db.collection('issues').doc(issueId).update({ lastEvaluatedAt: iso });
 }
 
+/**
+ * Mark an issue as auto-resolved by the reporter.
+ * Sets status to 'resolved' (a distinct terminal state from 'closed').
+ * Note: existing dashboards/digests that filter on status will need to be
+ * updated to recognize 'resolved' — out of scope for this helper.
+ */
 async function updateIssueResolution(issueId, { resolvedBy, resolvedReason }) {
   await db.collection('issues').doc(issueId).update({
     status: 'resolved',
@@ -454,25 +460,22 @@ async function searchOpenIssuesForAgent(_query, limit = 50) {
 }
 
 async function getGapByKey(normalizedKey) {
-  const snapshot = await db.collection('capability_gaps')
-    .where('normalizedKey', '==', normalizedKey)
-    .limit(1)
-    .get();
-  if (snapshot.empty) return null;
-  const doc = snapshot.docs[0];
+  const doc = await db.collection('capability_gaps').doc(normalizedKey).get();
+  if (!doc.exists) return null;
   return { id: doc.id, ...doc.data() };
 }
 
 async function createGap(data) {
-  const docRef = await db.collection('capability_gaps').add({
+  if (!data?.normalizedKey) throw new Error('createGap: normalizedKey is required');
+  await db.collection('capability_gaps').doc(data.normalizedKey).set({
     ...data,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  return docRef.id;
+  return data.normalizedKey;
 }
 
-async function updateGap(gapId, fields) {
-  await db.collection('capability_gaps').doc(gapId).update(fields);
+async function updateGap(normalizedKey, fields) {
+  await db.collection('capability_gaps').doc(normalizedKey).update(fields);
 }
 
 // --- Feedback (public website) ---
