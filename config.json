@@ -17,5 +17,10 @@
   "status_poll_cron": "*/2 * * * *",
   "status_fetch_timeout_ms": 10000,
   "status_default_channel_name": "poke-status",
-  "status_check_public": true
+  "status_check_public": true,
+  "pokedex_owner_id": "334468241638424576",
+  "pokedex_self_channel": "pokedex-testing",
+  "agent_enabled": true,
+  "agent_max_tool_calls": 5,
+  "agent_max_replies_per_thread_per_10m": 3
 }
