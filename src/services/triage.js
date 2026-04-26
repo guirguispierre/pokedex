@@ -50,7 +50,11 @@ function buildTriageButtons(issueId) {
 }
 
 function buildIssueEmbed(issue, issueId) {
-  const color = PRIORITY_COLORS[issue.priority] ?? 0x808080;
+  const isSelf = issue?.target === 'pokedex_bot';
+  const priority = issue.priority || 'unclassified';
+  const color = isSelf ? 0x8b5cf6 : (PRIORITY_COLORS[priority] ?? 0x808080);
+  const titlePrefix = isSelf ? '[Pokedex self] ' : '';
+
   const hasOriginalMessageLink = issue.guildId
     && issue.channelId
     && issue.messageId
@@ -61,7 +65,7 @@ function buildIssueEmbed(issue, issueId) {
     : null;
 
   const embed = new EmbedBuilder()
-    .setTitle(issue.summary)
+    .setTitle(`${titlePrefix}${issue.summary}`)
     .setColor(color)
     .addFields(
       { name: 'Priority', value: issue.priority, inline: true },
@@ -107,24 +111,53 @@ function buildIssueEmbed(issue, issueId) {
   return embed;
 }
 
-function findTriageChannel(guild) {
-  const channelName = getConfig('triage_channel');
-  return guild.channels.cache.find(ch => ch.name === channelName && ch.isTextBased());
+function findTriageChannel(guild, target = 'poke_product') {
+  const engName = getConfig('triage_channel') || 'eng-triage';
+  const selfName = getConfig('pokedex_self_channel') || 'pokedex-testing';
+
+  if (target === 'pokedex_bot') {
+    const selfChan = guild?.channels?.cache?.find?.(c => c.name === selfName && c.isTextBased?.());
+    if (selfChan) return selfChan;
+    // Fallback to eng-triage; caller should prepend [Pokedex self → fallback] in the embed title.
+  }
+  return guild?.channels?.cache?.find?.(c => c.name === engName && c.isTextBased?.()) || null;
 }
 
 async function postIssueEmbed(guild, issue, issueId) {
   const outputMode = getConfig('output_mode');
   if (outputMode === 'summary') return null;
 
-  const channel = findTriageChannel(guild);
+  const target = issue.target || 'poke_product';
+  const selfName = getConfig('pokedex_self_channel') || 'pokedex-testing';
+  const channel = findTriageChannel(guild, target);
   if (!channel) {
     console.error(`Triage channel "${getConfig('triage_channel')}" not found`);
     return null;
   }
 
+  // Detect if we fell back from the pokedex-self channel to eng-triage.
+  const usedFallback = target === 'pokedex_bot' && channel.name !== selfName;
+
+  // Build embed; if fallback occurred, patch the title prefix.
   const embed = buildIssueEmbed(issue, issueId);
+  if (usedFallback) {
+    const currentTitle = embed.data?.title || '';
+    embed.setTitle(currentTitle.replace(/^\[Pokedex self\] /, '[Pokedex self → fallback] '));
+  }
+
+  // Build owner mention for high/critical pokedex_bot issues.
+  const ownerId = getConfig('pokedex_owner_id');
+  const mentionLine = (target === 'pokedex_bot' && ['critical', 'high'].includes(issue.priority) && ownerId)
+    ? `<@${ownerId}>`
+    : '';
+
   const buttons = buildTriageButtons(issueId);
-  const msg = await channel.send({ embeds: [embed], components: buttons });
+  const msg = await channel.send({
+    content: mentionLine || undefined,
+    embeds: [embed],
+    components: buttons,
+    allowedMentions: ownerId ? { users: [ownerId] } : undefined,
+  });
 
   // Store channel ID alongside message ID so MCP servers can post updates via REST API
   await firestore.updateIssueTriageChannelId(issueId, channel.id);
