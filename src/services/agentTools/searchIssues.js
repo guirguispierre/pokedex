@@ -1,5 +1,20 @@
 const { jaccardSimilarity } = require('../duplicates');
 
+function normalizeCreatedAt(value) {
+  if (!value) return null;
+  // Firestore Timestamp has a toDate() method.
+  if (typeof value.toDate === 'function') {
+    try { return value.toDate().toISOString(); } catch { return null; }
+  }
+  // Already a Date.
+  if (value instanceof Date) return value.toISOString();
+  // Already a string (likely ISO) — pass through.
+  if (typeof value === 'string') return value;
+  // Numeric epoch.
+  if (typeof value === 'number') return new Date(value).toISOString();
+  return null;
+}
+
 async function searchIssues(args, ctx) {
   const query = String(args?.query || '').trim();
   const limit = Math.max(1, Math.min(10, Number(args?.limit) || 5));
@@ -8,7 +23,8 @@ async function searchIssues(args, ctx) {
   let candidates = [];
   try {
     candidates = await ctx.firestore.searchOpenIssuesForAgent(query, 50);
-  } catch {
+  } catch (err) {
+    console.error('[search_issues] firestore failed:', err.message);
     return [];
   }
 
@@ -22,7 +38,7 @@ async function searchIssues(args, ctx) {
       status: issue.status || 'open',
       priority: issue.priority || 'unknown',
       category: issue.category || 'other',
-      createdAt: issue.createdAt || null,
+      createdAt: normalizeCreatedAt(issue.createdAt),
       similarity: Math.round(similarity * 100) / 100,
     };
   });

@@ -15,16 +15,26 @@ test('returns empty array when no issues', async () => {
   assert.deepEqual(out, []);
 });
 
-test('ranks by Jaccard similarity against summary + text', async () => {
+test('ranks by Jaccard similarity using max(summary, text * 0.8) formula', async () => {
+  // Issue A: only the SUMMARY matches the query strongly (text is unrelated)
+  // Issue B: only the TEXT matches the query strongly (summary is unrelated)
+  // Under max(sumSim, textSim * 0.8):
+  //   A -> max(high, ~0)              = high
+  //   B -> max(~0, high * 0.8)        = high * 0.8
+  // So A should rank above B. Under sumSim-only, B ranks dead last (~0). Under
+  // textSim-only, A ranks dead last (~0). Under (sumSim+textSim)/2 the order is
+  // ambiguous. Only the spec'd formula gives A first, B second.
   const issues = [
-    { id: 'a', summary: 'Gmail integration broken for labels', text: 'labels not applying', status: 'open', priority: 'high', category: 'bug' },
-    { id: 'b', summary: 'Calendar sync slow', text: 'meetings delayed', status: 'open', priority: 'medium', category: 'performance' },
-    { id: 'c', summary: 'Gmail sync failing', text: 'cannot read new emails', status: 'open', priority: 'high', category: 'bug' },
+    { id: 'A', summary: 'gmail labels broken integration', text: 'unrelated content about weather forecast', status: 'open' },
+    { id: 'B', summary: 'unrelated content about weather forecast', text: 'gmail labels broken integration', status: 'open' },
+    { id: 'C', summary: 'totally different topic about pizza', text: 'totally different topic about pizza', status: 'open' },
   ];
-  const out = await searchIssues({ query: 'gmail labels broken' }, ctx(issues));
-  assert.ok(out.length >= 1, 'should return at least one match');
-  assert.equal(out[0].id, 'a', 'best match should be the Gmail labels issue');
-  assert.ok(typeof out[0].similarity === 'number');
+  const out = await searchIssues({ query: 'gmail labels broken integration' }, ctx(issues));
+  assert.equal(out.length, 3);
+  assert.equal(out[0].id, 'A', 'summary-match should rank first under max(sum, text*0.8)');
+  assert.equal(out[1].id, 'B', 'text-match should rank second (penalized 0.8x)');
+  assert.equal(out[2].id, 'C', 'no-match should rank last');
+  assert.ok(out[0].similarity > out[1].similarity, 'A.similarity > B.similarity due to 0.8 penalty on text');
 });
 
 test('respects limit argument (default 5)', async () => {
@@ -33,11 +43,4 @@ test('respects limit argument (default 5)', async () => {
   }));
   const out = await searchIssues({ query: 'gmail', limit: 3 }, ctx(issues));
   assert.equal(out.length, 3);
-});
-
-test('supplied channelId in args is ignored (ctx-only)', async () => {
-  // This is defense-in-depth; searchIssues doesn't use channelId anyway.
-  // Test documents the pattern for other tools.
-  const out = await searchIssues({ query: 'x', channelId: 'evil' }, ctx([]));
-  assert.deepEqual(out, []);
 });
