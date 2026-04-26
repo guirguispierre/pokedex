@@ -54,6 +54,8 @@ function parseClassification(content) {
   if (!parsed || typeof parsed !== 'object') return null;
   if (!VALID_PRIORITIES.includes(parsed.priority)) parsed.priority = 'unclassified';
   if (!VALID_TARGETS.includes(parsed.target)) parsed.target = 'poke_product';
+  const validCategories = getConfig('categories') || ['bug', 'feature_request', 'ux_issue', 'performance', 'security', 'suggestion', 'other'];
+  if (!validCategories.includes(parsed.category)) parsed.category = 'other';
   if (typeof parsed.summary !== 'string') return null;
   parsed.reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : '';
   parsed.follow_up = typeof parsed.follow_up === 'string' ? parsed.follow_up : null;
@@ -83,7 +85,8 @@ function fallbackClassification(text, reason) {
 
 async function triageIssue({ text, images = [], ctx, openrouter, parentMessage = null }) {
   const or = openrouter || require('./openrouter');
-  const maxToolCalls = Number(getConfig('agent_max_tool_calls')) || 5;
+  const configuredMax = getConfig('agent_max_tool_calls');
+  const maxToolCalls = (typeof configuredMax === 'number' && configuredMax >= 0) ? configuredMax : 5;
   const startedAt = Date.now();
 
   const userContent = parentMessage
@@ -96,35 +99,39 @@ async function triageIssue({ text, images = [], ctx, openrouter, parentMessage =
   ];
 
   let toolCallsMade = 0;
-  let imagesAttachedThisCall = images;
+  let pendingImages = images;
 
+  // +1 because the final iteration is for the model's classification response
+  // after we've spent up to maxToolCalls on tool dispatch.
   for (let i = 0; i < maxToolCalls + 1; i++) {
     let response;
     try {
       response = await or.callWithTools({
         messages,
         tools: agentTools.TOOL_SCHEMAS,
-        images: imagesAttachedThisCall,
+        images: pendingImages,
       });
-      imagesAttachedThisCall = [];
+      pendingImages = []; // Images already attached on first successful call; never re-attach.
     } catch (err) {
-      // Try once without images if we had images, in case vision is the problem
-      if (imagesAttachedThisCall.length > 0) {
-        imagesAttachedThisCall = [];
+      if (pendingImages.length > 0) {
+        // Vision may be the culprit — drop images and retry once. We accept the false
+        // positive that an unrelated 4xx/5xx wastes one retry; cost is negligible.
+        pendingImages = [];
         continue;
       }
-      return { ...fallbackClassification(text, `openrouter_error: ${err.message}`), agentMeta: { fallbackReason: `openrouter_error: ${err.message}`, toolCallsMade, durationMs: Date.now() - startedAt } };
+      return { ...fallbackClassification(text, `openrouter_error: ${String(err.message).slice(0, 200)}`), agentMeta: { fallbackReason: `openrouter_error: ${String(err.message).slice(0, 200)}`, toolCallsMade, durationMs: Date.now() - startedAt, modelUsed: getConfig('model') } };
     }
 
     if (response.tool_calls && response.tool_calls.length > 0) {
       if (toolCallsMade >= maxToolCalls) {
-        return { ...fallbackClassification(text, 'budget_exhausted'), agentMeta: { fallbackReason: 'budget_exhausted', toolCallsMade, durationMs: Date.now() - startedAt } };
+        return { ...fallbackClassification(text, 'budget_exhausted'), agentMeta: { fallbackReason: 'budget_exhausted', toolCallsMade, durationMs: Date.now() - startedAt, modelUsed: getConfig('model') } };
       }
+      // Push the assistant turn ONCE with all tool_calls intact.
+      messages.push({ role: 'assistant', content: response.content, tool_calls: response.tool_calls });
       for (const call of response.tool_calls) {
         let args = {};
         try { args = JSON.parse(call.function?.arguments || '{}'); } catch { args = {}; }
         const result = await agentTools.dispatch(call.function?.name, args, ctx);
-        messages.push({ role: 'assistant', content: null, tool_calls: [call] });
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result).slice(0, 6000) });
         toolCallsMade++;
       }
@@ -133,7 +140,7 @@ async function triageIssue({ text, images = [], ctx, openrouter, parentMessage =
 
     const classification = parseClassification(response.content);
     if (!classification) {
-      return { ...fallbackClassification(text, 'invalid_json'), agentMeta: { fallbackReason: 'invalid_json', toolCallsMade, durationMs: Date.now() - startedAt } };
+      return { ...fallbackClassification(text, 'invalid_json'), agentMeta: { fallbackReason: 'invalid_json', toolCallsMade, durationMs: Date.now() - startedAt, modelUsed: getConfig('model') } };
     }
     return {
       ...classification,
@@ -141,7 +148,7 @@ async function triageIssue({ text, images = [], ctx, openrouter, parentMessage =
     };
   }
 
-  return { ...fallbackClassification(text, 'budget_exhausted'), agentMeta: { fallbackReason: 'budget_exhausted', toolCallsMade, durationMs: Date.now() - startedAt } };
+  return { ...fallbackClassification(text, 'budget_exhausted'), agentMeta: { fallbackReason: 'budget_exhausted', toolCallsMade, durationMs: Date.now() - startedAt, modelUsed: getConfig('model') } };
 }
 
 module.exports = { triageIssue, parseClassification, fallbackClassification };
