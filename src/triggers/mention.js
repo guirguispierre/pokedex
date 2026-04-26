@@ -2,6 +2,22 @@ const { EmbedBuilder } = require('discord.js');
 const { enqueue } = require('../services/queue');
 const { processIssue } = require('../services/pipeline');
 
+async function extractParentContext(message) {
+  const refId = message?.reference?.messageId;
+  if (!refId) return null;
+  try {
+    const parent = await message.channel.messages.fetch(refId);
+    if (!parent) return null;
+    return {
+      content: String(parent.content || '').slice(0, 1000),
+      author: parent.author?.username || 'unknown',
+      authorId: parent.author?.id || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Per-user rate limiting for issue submissions (5 per 5 minutes)
 const mentionRateLimits = new Map();
 const MENTION_RATE_WINDOW_MS = 5 * 60_000;
@@ -53,18 +69,10 @@ async function handleMention(message) {
     return;
   }
 
-  // Include replied-to message context if present
-  let fullText = text;
-  if (message.reference) {
-    try {
-      const referenced = await message.channel.messages.fetch(message.reference.messageId);
-      fullText = `[Context from replied message]: ${referenced.content}\n\n[User's report]: ${text}`;
-    } catch {
-      // Could not fetch referenced message, proceed with just the text
-    }
-  }
-
-  enqueue(() => processIssue(message, fullText));
+  const parent = await extractParentContext(message);
+  enqueue(() => processIssue(message, text, {
+    parentMessage: parent ? { ...parent, replierUsername: message.author.username } : null,
+  }));
 }
 
-module.exports = { handleMention };
+module.exports = { handleMention, extractParentContext };

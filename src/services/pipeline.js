@@ -26,7 +26,7 @@ function collectImageUrls(message) {
   return out;
 }
 
-async function processIssue(message, text) {
+async function processIssue(message, text, opts = {}) {
   // Exact message duplicate check
   const isDupe = await firestore.isDuplicate(message.id);
   if (isDupe) return;
@@ -45,6 +45,7 @@ async function processIssue(message, text) {
         reporterId: message.author.id,
         reporterName: message.author.username,
       },
+      parentMessage: opts.parentMessage || null,
     });
   } else {
     classification = await classifyIssue(text);
