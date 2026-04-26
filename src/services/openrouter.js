@@ -212,4 +212,60 @@ Return ONLY valid JSON:
   }
 }
 
-module.exports = { classifyIssue, evaluateIssueContext };
+async function callWithTools({ messages, tools, images = [], model: overrideModel, maxTokens = 2000 }) {
+  const model = overrideModel || getConfig('model');
+
+  // Inject images into the first user message if provided.
+  const payloadMessages = messages.map(m => ({ ...m }));
+  if (images.length > 0) {
+    const firstUserIdx = payloadMessages.findIndex(m => m.role === 'user');
+    if (firstUserIdx >= 0) {
+      const existing = payloadMessages[firstUserIdx];
+      const parts = [
+        { type: 'text', text: typeof existing.content === 'string' ? existing.content : '' },
+        ...images.map(url => ({ type: 'image_url', image_url: { url } })),
+      ];
+      payloadMessages[firstUserIdx] = { role: 'user', content: parts };
+    }
+  }
+
+  const body = {
+    model,
+    messages: payloadMessages,
+    max_tokens: maxTokens,
+  };
+  if (tools && tools.length > 0) {
+    body.tools = tools;
+    body.tool_choice = 'auto';
+  } else {
+    body.response_format = { type: 'json_object' };
+  }
+
+  const response = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://poke.com',
+      'X-Title': 'Pokedex Agent Triage',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`openrouter ${response.status}: ${text.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const msg = data.choices?.[0]?.message;
+  if (!msg) throw new Error('openrouter: no choices');
+
+  return {
+    content: typeof msg.content === 'string' ? msg.content : null,
+    tool_calls: Array.isArray(msg.tool_calls) ? msg.tool_calls : [],
+    usage: data.usage || null,
+  };
+}
+
+module.exports = { classifyIssue, evaluateIssueContext, callWithTools };
