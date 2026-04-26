@@ -11,7 +11,6 @@ async function extractParentContext(message) {
     return {
       content: String(parent.content || '').slice(0, 1000),
       author: parent.author?.username || 'unknown',
-      authorId: parent.author?.id || null,
     };
   } catch {
     return null;

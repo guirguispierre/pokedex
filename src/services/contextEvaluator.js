@@ -10,7 +10,7 @@ async function evaluateContext(issue, conversationHistory, extraHint) {
 async function processEvaluation(guild, issue, issueId, evaluation) {
   // Update triage embed if there's new context to show
   if (evaluation.triageUpdate && issue.triageMessageId) {
-    const triageChannel = findTriageChannel(guild);
+    const triageChannel = findTriageChannel(guild, issue.target);
     if (triageChannel) {
       try {
         const triageMsg = await triageChannel.messages.fetch(issue.triageMessageId);
@@ -45,7 +45,7 @@ async function processEvaluation(guild, issue, issueId, evaluation) {
 
 async function updateContextBadge(guild, issue, issueId) {
   if (!issue.triageMessageId) return;
-  const triageChannel = findTriageChannel(guild);
+  const triageChannel = findTriageChannel(guild, issue.target);
   if (!triageChannel) return;
 
   try {

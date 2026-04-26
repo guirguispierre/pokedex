@@ -97,6 +97,11 @@ function fallbackClassification(text, reason) {
 async function triageIssue({ text, images = [], ctx, openrouter, parentMessage = null, triggerHint = null }) {
   const or = openrouter || require('./openrouter');
   const configuredMax = getConfig('agent_max_tool_calls');
+  // Budget semantics: this caps the number of *individual tool dispatches*
+  // across all iterations, not the number of agent loop rounds. A single
+  // model turn may emit N parallel tool_calls; each counts toward the budget.
+  // When toolCallsMade >= maxToolCalls, the next round is rejected with
+  // fallbackReason: 'budget_exhausted'.
   const maxToolCalls = (typeof configuredMax === 'number' && configuredMax >= 0) ? configuredMax : 5;
   const startedAt = Date.now();
 
@@ -112,7 +117,7 @@ async function triageIssue({ text, images = [], ctx, openrouter, parentMessage =
   ];
 
   let toolCallsMade = 0;
-  let pendingImages = images;
+  let pendingImages = images.slice();
 
   // +1 because the final iteration is for the model's classification response
   // after we've spent up to maxToolCalls on tool dispatch.

@@ -52,5 +52,20 @@ test('caps limit at 50 even if agent asks for more', async () => {
   const guild = fakeGuild({ channels: [channel] });
 
   const out = await readChannel({ limit: 1000 }, { guild, channelId: 'c1' });
-  assert.ok(out.length <= 50);
+  assert.equal(out.length, 50, 'limit must be exactly 50, not less');
+});
+
+test('filters out messages from bots', async () => {
+  const messages = [
+    fakeMessage({ id: 'm1', content: 'human message', authorUsername: 'alice', isBot: false }),
+    fakeMessage({ id: 'm2', content: 'bot reply', authorUsername: 'pokedex', isBot: true }),
+    fakeMessage({ id: 'm3', content: 'another human', authorUsername: 'bob', isBot: false }),
+  ];
+  const channel = fakeChannel({ id: 'c1', messages });
+  const guild = fakeGuild({ channels: [channel] });
+
+  const out = await readChannel({}, { guild, channelId: 'c1' });
+  assert.equal(out.length, 2);
+  assert.equal(out[0].content, 'human message');
+  assert.equal(out[1].content, 'another human');
 });

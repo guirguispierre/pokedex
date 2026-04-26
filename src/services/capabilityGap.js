@@ -53,6 +53,9 @@ async function record({ gap, issueId, guild, firestore, ownerId, channelName }) 
   const existing = await firestore.getGapByKey(normalizedKey);
 
   if (existing) {
+    // NOTE: 'shipped' and 'wont_do' statuses are intentionally never set by
+    // this service — they are reserved for future admin lifecycle commands
+    // (Spec B). Until then this branch is unreachable.
     if (existing.status === 'shipped' || existing.status === 'wont_do') {
       await firestore.updateGap(normalizedKey, {
         occurrenceCount: (existing.occurrenceCount || 0) + 1,

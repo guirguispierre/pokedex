@@ -1257,11 +1257,12 @@ async function triageIssue({ text, images = [], ctx, openrouter, parentMessage =
       if (toolCallsMade >= maxToolCalls) {
         return { ...fallbackClassification(text, 'budget_exhausted'), agentMeta: { fallbackReason: 'budget_exhausted', toolCallsMade, durationMs: Date.now() - startedAt } };
       }
+      // Push the assistant turn ONCE with all tool_calls intact (OpenAI spec).
+      messages.push({ role: 'assistant', content: response.content, tool_calls: response.tool_calls });
       for (const call of response.tool_calls) {
         let args = {};
         try { args = JSON.parse(call.function?.arguments || '{}'); } catch { args = {}; }
         const result = await agentTools.dispatch(call.function?.name, args, ctx);
-        messages.push({ role: 'assistant', content: null, tool_calls: [call] });
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result).slice(0, 6000) });
         toolCallsMade++;
       }
@@ -1283,6 +1284,8 @@ async function triageIssue({ text, images = [], ctx, openrouter, parentMessage =
 
 module.exports = { triageIssue, parseClassification, fallbackClassification };
 ```
+
+**Erratum (2026-04-25, applied in commit `f0957d3`):** an earlier version of this code block pushed one `{ role: 'assistant', tool_calls: [call] }` per tool call inside the for-loop. That violates the OpenAI/OpenRouter chat-completions schema, which requires exactly one assistant message containing the full `tool_calls` array, followed by N `role: 'tool'` messages keyed by `tool_call_id`. The above version is correct.
 
 - [ ] **Step 4: Run tests**
 

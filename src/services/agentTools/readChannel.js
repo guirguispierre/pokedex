@@ -23,6 +23,7 @@ async function readChannel(args, ctx) {
 
   const out = [];
   for (const m of batch.values ? batch.values() : batch) {
+    if (m.author?.bot) continue; // Skip bot's own messages — they aren't useful as channel context
     const attachmentsList = m.attachments
       ? (typeof m.attachments.values === 'function' ? Array.from(m.attachments.values()) : [])
       : [];
