@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.9.0] - 2026-04-25
+
+### Added
+- Screenshot reading via vision — agent extracts visible error text, screen, and app state from image attachments into `evidence.screenshot_text`.
+- Tool-using agent triage loop with three tools: `search_issues`, `get_poke_status`, `read_channel_context`.
+- Capability-gap backlog in `#pokedex-testing` — agent-detected gaps are deduped, reposted with counts, and @-mention the owner at 1/3/10/50 occurrences.
+- Auto-resolve when the reporter says "solved"/"fixed"/etc. in an issue thread (reporter-only; unambiguous phrasing only).
+- Smart thread replies — replaces blanket ✅ reactions with `responseMode: ignore | react | reply`.
+- Mention-reply parent context — when a mention is a reply to another user's message, the parent content is what gets classified.
+- Early-exit on casual-chatter mentions and direct questions to the bot (no issue created, optional short help reply).
+- `target`-based routing: poke.com product bugs → `eng-triage`; Pokedex-self bugs and feature requests → `#pokedex-testing`.
+- `node --test` harness; unit tests for agent tools, capability-gap dedup, target routing, rate limiting, auto-resolve, mention parent context.
+
+### Changed
+- `/pokedexbug` now runs through the agent for richer classification (screenshot reading, capability gaps) while preserving user-selected priority and category.
+- Issue schema gains `target`, `evidence`, `agentMeta`, `lastEvaluatedAt`, and resolution fields (`resolvedAt`, `resolvedBy`, `resolvedReason`).
+- Forum and non-forum thread paths are unified through one evaluator.
+
+### Config
+- `pokedex_owner_id` (default `"334468241638424576"`)
+- `pokedex_self_channel` (default `"pokedex-testing"`)
+- `agent_enabled` (default `true`; set `false` to roll back to single-shot classification)
+- `agent_max_tool_calls` (default `5`)
+- `agent_max_replies_per_thread_per_10m` (default `3`)
+
+All new keys are settable via `/config set` autocomplete.
+
 ## [2.5.1] - 2026-04-14
 
 ### Added
