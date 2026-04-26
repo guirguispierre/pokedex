@@ -72,6 +72,7 @@ async function handleMention(message) {
   const parent = await extractParentContext(message);
   enqueue(() => processIssue(message, text, {
     parentMessage: parent ? { ...parent, replierUsername: message.author.username } : null,
+    trigger: 'mention',
   }));
 }
 

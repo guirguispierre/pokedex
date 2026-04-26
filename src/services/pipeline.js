@@ -46,12 +46,46 @@ async function processIssue(message, text, opts = {}) {
         reporterName: message.author.username,
       },
       parentMessage: opts.parentMessage || null,
+      triggerHint: opts.trigger || null,
     });
   } else {
     classification = await classifyIssue(text);
     classification.target = 'poke_product';
     classification.evidence = classification.evidence || { screenshot_text: null, related_issues: null, active_incident: null };
   }
+
+  // --- Early-exit on chatter / question_to_bot / followup_on_existing ---
+  if (classification.mentionType === 'chatter') {
+    console.log(`[pipeline] mention classified as chatter, skipping. message ${message.id}`);
+    return;
+  }
+
+  if (classification.mentionType === 'question_to_bot') {
+    try {
+      await message.reply({
+        content: 'I do bug triage for poke.com — if you have a bug or suggestion, describe it and I\'ll log it. Try `/help` for commands.',
+        allowedMentions: { repliedUser: false },
+      });
+    } catch {}
+    return;
+  }
+
+  if (classification.mentionType === 'followup_on_existing'
+      && Array.isArray(classification.evidence?.related_issues)
+      && classification.evidence.related_issues.length > 0) {
+    const relatedId = classification.evidence.related_issues[0];
+    try {
+      await firestore.appendThreadContext(relatedId, `[From mention by ${message.author.username}]: ${text}`);
+      await message.reply({
+        content: `Linked to existing issue \`${relatedId}\`. Adding your note as context.`,
+        allowedMentions: { repliedUser: false },
+      });
+    } catch (err) {
+      console.error('followup_on_existing append failed:', err.message);
+    }
+    return;
+  }
+  // Otherwise treat as new_issue and fall through to the normal save path.
 
   // --- Semantic duplicate detection (Jaccard fast → AI accurate) ---
   try {

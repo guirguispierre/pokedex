@@ -26,6 +26,13 @@ If you identify that you could have triaged better *if* you had a capability you
 ## Vision
 If an image is attached, extract visible error text, which screen/app is shown, and any relevant app state. Put findings in evidence.screenshot_text.
 
+## Mention type (only set when called for a mention trigger; otherwise omit)
+Set mentionType to one of:
+- "new_issue": the message (or its parent, on a reply) describes a real issue. Proceed with full classification.
+- "followup_on_existing": this is conversation about an already-reported issue. Use search_issues to find the best match; include its id in evidence.related_issues; set summary/reasoning briefly.
+- "chatter": casual mention with no report ("lol @Pokedex is broken"). Do NOT create an issue.
+- "question_to_bot": user is asking Pokedex something directly ("@Pokedex what do you do?"). Reply with a short help message pointing to /help. Do NOT create an issue.
+
 ## Output
 Return ONLY valid JSON matching:
 {
@@ -40,7 +47,8 @@ Return ONLY valid JSON matching:
     "related_issues": ["issueId", ...] | null,
     "active_incident": "name of active incident from get_poke_status, or null"
   },
-  "capability_gap": { "title": "short", "detail": "1 sentence" } | null
+  "capability_gap": { "title": "short", "detail": "1 sentence" } | null,
+  "mentionType": "new_issue" | "followup_on_existing" | "chatter" | "question_to_bot" | null
 }`;
 }
 
@@ -66,6 +74,9 @@ function parseClassification(content) {
   parsed.capability_gap = parsed.capability_gap && typeof parsed.capability_gap === 'object'
     ? { title: String(parsed.capability_gap.title || '').slice(0, 100), detail: String(parsed.capability_gap.detail || '').slice(0, 500) }
     : null;
+  parsed.mentionType = ['new_issue', 'followup_on_existing', 'chatter', 'question_to_bot'].includes(parsed.mentionType)
+    ? parsed.mentionType
+    : null;
   return parsed;
 }
 
@@ -83,15 +94,17 @@ function fallbackClassification(text, reason) {
   };
 }
 
-async function triageIssue({ text, images = [], ctx, openrouter, parentMessage = null }) {
+async function triageIssue({ text, images = [], ctx, openrouter, parentMessage = null, triggerHint = null }) {
   const or = openrouter || require('./openrouter');
   const configuredMax = getConfig('agent_max_tool_calls');
   const maxToolCalls = (typeof configuredMax === 'number' && configuredMax >= 0) ? configuredMax : 5;
   const startedAt = Date.now();
 
-  const userContent = parentMessage
+  const triggerLine = triggerHint === 'mention' ? '(Trigger: mention. Set mentionType in your output.)\n\n' : '';
+  const baseContent = parentMessage
     ? `PARENT MESSAGE (the mention was a reply to this — classify its content, not the reply wrapper):\n[${parentMessage.author}]: ${parentMessage.content}\n\nREPLY FROM ${parentMessage.replierUsername || 'replier'}:\n${text}`
     : text;
+  const userContent = triggerLine + baseContent;
 
   const messages = [
     { role: 'system', content: buildSystemPrompt() },
