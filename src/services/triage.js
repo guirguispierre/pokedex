@@ -65,13 +65,13 @@ function buildIssueEmbed(issue, issueId) {
     : null;
 
   const embed = new EmbedBuilder()
-    .setTitle(`${titlePrefix}${issue.summary}`)
+    .setTitle(`${titlePrefix}${issue.summary || '(no summary)'}`)
     .setColor(color)
     .addFields(
-      { name: 'Priority', value: issue.priority, inline: true },
+      { name: 'Priority', value: priority, inline: true },
       { name: 'Category', value: issue.category?.replace(/_/g, ' ') || 'other', inline: true },
-      { name: 'Reporter', value: issue.reporterName, inline: true },
-      { name: 'Reasoning', value: issue.reasoning },
+      { name: 'Reporter', value: issue.reporterName || 'unknown', inline: true },
+      { name: 'Reasoning', value: issue.reasoning || '(no reasoning provided)' },
     )
     .setFooter({ text: `Issue ID: ${issueId}` })
     .setTimestamp();
