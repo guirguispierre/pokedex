@@ -19,7 +19,7 @@
 - Forum and non-forum thread paths are unified through one evaluator.
 
 ### Config
-- `pokedex_owner_id` (default `"334468241638424576"`)
+- `pokedex_owner_id` (default `null`; set via `POKEDEX_OWNER_ID` env var or `/config set pokedex_owner_id <discord-user-id>`)
 - `pokedex_self_channel` (default `"pokedex-testing"`)
 - `agent_enabled` (default `true`; set `false` to roll back to single-shot classification)
 - `agent_max_tool_calls` (default `5`)

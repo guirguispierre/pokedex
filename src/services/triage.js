@@ -1,6 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const cron = require('node-cron');
-const { getConfig } = require('../config/config');
+const { getConfig, getOwnerId } = require('../config/config');
 const firestore = require('./firestore');
 
 const PRIORITY_COLORS = {
@@ -146,7 +146,7 @@ async function postIssueEmbed(guild, issue, issueId) {
   }
 
   // Build owner mention for high/critical pokedex_bot issues.
-  const ownerId = getConfig('pokedex_owner_id');
+  const ownerId = getOwnerId();
   const mentionLine = (target === 'pokedex_bot' && ['critical', 'high'].includes(issue.priority) && ownerId)
     ? `<@${ownerId}>`
     : '';

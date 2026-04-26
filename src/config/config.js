@@ -25,6 +25,14 @@ function getConfig(key) {
   return undefined;
 }
 
+// Owner ID is sensitive (identifies a real Discord user). Resolution order:
+// 1. Firestore override (set via /config set pokedex_owner_id ...)
+// 2. POKEDEX_OWNER_ID env var
+// 3. null (no owner — gap pings won't @-mention)
+function getOwnerId() {
+  return getConfig('pokedex_owner_id') || process.env.POKEDEX_OWNER_ID || null;
+}
+
 function getAllConfig() {
   const merged = { ...fileDefaults };
   for (const [key, value] of Object.entries(firestoreOverrides)) {
@@ -49,4 +57,4 @@ async function init() {
   await loadFirestoreOverrides();
 }
 
-module.exports = { init, getConfig, getAllConfig, setConfigOverride, resetConfigOverride, setFirestoreService };
+module.exports = { init, getConfig, getAllConfig, getOwnerId, setConfigOverride, resetConfigOverride, setFirestoreService };

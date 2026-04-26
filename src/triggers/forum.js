@@ -1,6 +1,6 @@
 const { ChannelType, EmbedBuilder } = require('discord.js');
 const admin = require('firebase-admin');
-const { getConfig } = require('../config/config');
+const { getConfig, getOwnerId } = require('../config/config');
 const { classifyIssue } = require('../services/openrouter');
 const agentTriage = require('../services/agentTriage');
 const capabilityGap = require('../services/capabilityGap');
@@ -253,7 +253,7 @@ async function handleForumPost(thread) {
         issueId,
         guild: thread.guild,
         firestore,
-        ownerId: getConfig('pokedex_owner_id'),
+        ownerId: getOwnerId(),
         channelName: getConfig('pokedex_self_channel') || 'pokedex-testing',
       });
     } catch (err) {

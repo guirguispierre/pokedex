@@ -4,7 +4,7 @@ const agentTriage = require('./agentTriage');
 const capabilityGap = require('./capabilityGap');
 const firestore = require('./firestore');
 const triage = require('./triage');
-const { getConfig } = require('../config/config');
+const { getConfig, getOwnerId } = require('../config/config');
 const { findDuplicate, findDuplicateAI } = require('./duplicates');
 
 const PRIORITY_COLORS = {
@@ -174,7 +174,7 @@ async function processIssue(message, text, opts = {}) {
         issueId,
         guild: message.guild,
         firestore,
-        ownerId: getConfig('pokedex_owner_id'),
+        ownerId: getOwnerId(),
         channelName: getConfig('pokedex_self_channel') || 'pokedex-testing',
       });
     } catch (err) {
@@ -341,7 +341,7 @@ async function processIssueForced(message, text) {
         issueId,
         guild: message.guild,
         firestore,
-        ownerId: getConfig('pokedex_owner_id'),
+        ownerId: getOwnerId(),
         channelName: getConfig('pokedex_self_channel') || 'pokedex-testing',
       });
     } catch (err) {

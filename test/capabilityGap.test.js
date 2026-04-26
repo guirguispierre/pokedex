@@ -41,14 +41,14 @@ test('record creates new gap + channel post on first occurrence', async () => {
   const guild = fakeGuild({ channels: [channel] });
 
   const gap = { title: 'log query tool', detail: 'would have confirmed by checking server logs' };
-  await record({ gap, issueId: 'i1', guild, firestore, ownerId: '334468241638424576', channelName: 'pokedex-testing' });
+  await record({ gap, issueId: 'i1', guild, firestore, ownerId: '123456789012345678', channelName: 'pokedex-testing' });
 
   const stored = await firestore.getGapByKey(normalizeKey('log query tool'));
   assert.ok(stored);
   assert.equal(stored.occurrenceCount, 1);
   assert.deepEqual(stored.exampleIssueIds, ['i1']);
   assert.equal(postedMessages.length, 1);
-  assert.ok(postedMessages[0].payload.content.includes('<@334468241638424576>'));
+  assert.ok(postedMessages[0].payload.content.includes('<@123456789012345678>'));
 });
 
 test('record edits existing post on second occurrence without re-pinging', async () => {
@@ -77,11 +77,11 @@ test('record edits existing post on second occurrence without re-pinging', async
   const guild = fakeGuild({ channels: [channel] });
 
   const gap = { title: 'Log Query Tool', detail: 'same gap' };
-  await record({ gap, issueId: 'i2', guild, firestore, ownerId: '334468241638424576', channelName: 'pokedex-testing' });
+  await record({ gap, issueId: 'i2', guild, firestore, ownerId: '123456789012345678', channelName: 'pokedex-testing' });
 
   const stored = await firestore.getGapByKey(normalizeKey('log query tool'));
   assert.equal(stored.occurrenceCount, 2);
   assert.deepEqual(stored.exampleIssueIds, ['i1', 'i2']);
   assert.ok(edited, 'existing post was edited');
-  assert.ok(!edited.content.includes('<@334468241638424576>'), 'no re-ping at count 2');
+  assert.ok(!edited.content.includes('<@123456789012345678>'), 'no re-ping at count 2');
 });

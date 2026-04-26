@@ -2,7 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const firestore = require('../services/firestore');
 const { postIssueEmbed } = require('../services/triage');
 const agentTriage = require('../services/agentTriage');
-const { getConfig } = require('../config/config');
+const { getConfig, getOwnerId } = require('../config/config');
 const capabilityGap = require('../services/capabilityGap');
 
 const PRIORITY_CHOICES = [
@@ -133,7 +133,7 @@ async function execute(interaction) {
         issueId,
         guild: interaction.guild,
         firestore,
-        ownerId: getConfig('pokedex_owner_id'),
+        ownerId: getOwnerId(),
         channelName: getConfig('pokedex_self_channel') || 'pokedex-testing',
       });
     } catch (err) {

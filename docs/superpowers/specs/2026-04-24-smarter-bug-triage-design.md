@@ -172,7 +172,7 @@ New keys added to `src/config/config.js` defaults + `config.json`:
 
 | Key | Default | Purpose |
 |---|---|---|
-| `pokedex_owner_id` | `"334468241638424576"` | Discord user ID to @-mention on first-seen gaps and critical self-bugs |
+| `pokedex_owner_id` | `null` (env: `POKEDEX_OWNER_ID`) | Discord user ID to @-mention on first-seen gaps and critical self-bugs |
 | `pokedex_self_channel` | `"pokedex-testing"` | Channel name for Pokedex-self issues + capability-gap backlog |
 | `agent_enabled` | `true` | Master kill switch. `false` → fall back to today's single-shot `classifyIssue` |
 | `agent_max_tool_calls` | `5` | Hard cap per triage invocation |

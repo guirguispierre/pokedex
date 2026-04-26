@@ -275,7 +275,7 @@ Expected: JSON object with `model`, `triage_channel`, etc.
 Merge these keys into the existing object (keep all current keys; add these; preserve alphabetical-ish grouping where possible):
 
 ```json
-"pokedex_owner_id": "334468241638424576",
+"pokedex_owner_id": null,
 "pokedex_self_channel": "pokedex-testing",
 "agent_enabled": true,
 "agent_max_tool_calls": 5,
@@ -1486,14 +1486,14 @@ test('record creates new gap + channel post on first occurrence', async () => {
   const guild = fakeGuild({ channels: [channel] });
 
   const gap = { title: 'log query tool', detail: 'would have confirmed by checking server logs' };
-  await record({ gap, issueId: 'i1', guild, firestore, ownerId: '334468241638424576', channelName: 'pokedex-testing' });
+  await record({ gap, issueId: 'i1', guild, firestore, ownerId: '123456789012345678', channelName: 'pokedex-testing' });
 
   const stored = await firestore.getGapByKey(normalizeKey('log query tool'));
   assert.ok(stored);
   assert.equal(stored.occurrenceCount, 1);
   assert.deepEqual(stored.exampleIssueIds, ['i1']);
   assert.equal(postedMessages.length, 1);
-  assert.ok(postedMessages[0].payload.content.includes('<@334468241638424576>'));
+  assert.ok(postedMessages[0].payload.content.includes('<@123456789012345678>'));
 });
 
 test('record edits existing post on second occurrence without re-pinging', async () => {
@@ -1522,13 +1522,13 @@ test('record edits existing post on second occurrence without re-pinging', async
   const guild = fakeGuild({ channels: [channel] });
 
   const gap = { title: 'Log Query Tool', detail: 'same gap' };
-  await record({ gap, issueId: 'i2', guild, firestore, ownerId: '334468241638424576', channelName: 'pokedex-testing' });
+  await record({ gap, issueId: 'i2', guild, firestore, ownerId: '123456789012345678', channelName: 'pokedex-testing' });
 
   const stored = await firestore.getGapByKey(normalizeKey('log query tool'));
   assert.equal(stored.occurrenceCount, 2);
   assert.deepEqual(stored.exampleIssueIds, ['i1', 'i2']);
   assert.ok(edited, 'existing post was edited');
-  assert.ok(!edited.content.includes('<@334468241638424576>'), 'no re-ping at count 2');
+  assert.ok(!edited.content.includes('<@123456789012345678>'), 'no re-ping at count 2');
 });
 ```
 
@@ -2780,7 +2780,7 @@ Edit `CHANGELOG.md` and insert this block immediately after the top-level title 
 - Forum and non-forum thread paths are unified through one evaluator.
 
 ### Config
-- `pokedex_owner_id` (default `"334468241638424576"`)
+- `pokedex_owner_id` (default `null`; set via `POKEDEX_OWNER_ID` env var or `/config set pokedex_owner_id <discord-user-id>`)
 - `pokedex_self_channel` (default `"pokedex-testing"`)
 - `agent_enabled` (default `true`; set `false` to roll back to single-shot classification)
 - `agent_max_tool_calls` (default `5`)
