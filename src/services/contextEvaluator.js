@@ -68,4 +68,18 @@ function buildConversationHistory(messages) {
   }));
 }
 
-module.exports = { evaluateContext, processEvaluation, updateContextBadge, buildConversationHistory };
+function collectNewImageUrls(messages, sinceIso) {
+  const cutoff = sinceIso ? Date.parse(sinceIso) : 0;
+  const urls = [];
+  for (const m of messages) {
+    const createdAt = m.createdAt?.getTime?.() || Date.parse(m.createdAt) || 0;
+    if (createdAt <= cutoff) continue;
+    const atts = m.attachments ? (m.attachments.values ? Array.from(m.attachments.values()) : m.attachments) : [];
+    for (const a of atts) {
+      if ((a.contentType || '').startsWith('image/') && a.url) urls.push(a.url);
+    }
+  }
+  return urls;
+}
+
+module.exports = { evaluateContext, processEvaluation, updateContextBadge, buildConversationHistory, collectNewImageUrls };

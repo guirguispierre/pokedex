@@ -155,16 +155,21 @@ For this category, good reports usually include: ${checklist}
 - Mark complete: true ONLY when a developer would have enough to start working without further questions
 - If user says "never mind" / "fixed itself" — acknowledge warmly, note self-resolved
 - Keep replies short, friendly, and focused — one question at a time
+- responseMode: "ignore" for thanks, "ok", emoji-only, or third-party chatter. "react" when the reporter confirms info without asking anything. "reply" when there's substantive new info, a bot clarifying question to ask, or a reply from the bot is warranted.
+- Only mark resolved: true when the REPORTER (original author of the issue) indicates resolution unambiguously (e.g., "solved", "fixed", "nvm works now", "figured it out"). Hedged phrases like "we need this fixed" do NOT count.
+- If unsure whether the issue is resolved, set resolved: false AND responseMode: "reply" with reply: "sounds like this is working now — should I close this out?"
 ${extraHint ? `\n## Additional Instruction\n${extraHint}` : ''}
 
 Return ONLY valid JSON:
 {
   "complete": boolean,
   "missing": ["what is still needed"],
-  "shouldReply": boolean,
+  "responseMode": "ignore" | "react" | "reply",
   "reply": "what to say to the user" or null,
   "triageUpdate": "new context summary for the engineering triage embed" or null,
-  "reclassify": boolean
+  "reclassify": boolean,
+  "resolved": boolean,
+  "resolvedReason": "one-line reason or null"
 }`;
 
   try {
@@ -188,7 +193,7 @@ Return ONLY valid JSON:
 
     if (!response.ok) {
       console.error(`Context evaluator API error: ${response.status}`);
-      return { complete: false, missing: [], shouldReply: false, reply: null, triageUpdate: null, reclassify: false };
+      return { complete: false, missing: [], responseMode: 'ignore', shouldReply: false, reply: null, triageUpdate: null, reclassify: false, resolved: false, resolvedReason: null };
     }
 
     const data = await response.json();
@@ -201,14 +206,18 @@ Return ONLY valid JSON:
     return {
       complete: !!parsed.complete,
       missing: Array.isArray(parsed.missing) ? parsed.missing : [],
-      shouldReply: !!parsed.shouldReply,
+      responseMode: ['ignore', 'react', 'reply'].includes(parsed.responseMode) ? parsed.responseMode : 'react',
+      // Keep `shouldReply` as derived alias for forum-path callers until Task 15 unifies them.
+      shouldReply: parsed.responseMode === 'reply',
       reply: typeof parsed.reply === 'string' ? parsed.reply : null,
       triageUpdate: typeof parsed.triageUpdate === 'string' ? parsed.triageUpdate : null,
       reclassify: !!parsed.reclassify,
+      resolved: !!parsed.resolved,
+      resolvedReason: typeof parsed.resolvedReason === 'string' ? parsed.resolvedReason : null,
     };
   } catch (err) {
     console.error('Context evaluator failed:', err.message);
-    return { complete: false, missing: [], shouldReply: false, reply: null, triageUpdate: null, reclassify: false };
+    return { complete: false, missing: [], responseMode: 'ignore', shouldReply: false, reply: null, triageUpdate: null, reclassify: false, resolved: false, resolvedReason: null };
   }
 }
 
