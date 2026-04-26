@@ -8,6 +8,30 @@ const { evaluateContext, processEvaluation, buildConversationHistory } = require
 const pendingUpdates = new Map();
 const DEBOUNCE_MS = 5000;
 
+// Rate-limit state: per-thread reply timestamps
+const replyHistory = new Map(); // threadId -> [timestamps]
+
+function canBotReplyInThread(threadId, nowMs = Date.now()) {
+  const maxReplies = Number(require('../config/config').getConfig('agent_max_replies_per_thread_per_10m')) || 3;
+  const windowMs = 10 * 60 * 1000;
+  const history = (replyHistory.get(threadId) || []).filter(t => nowMs - t < windowMs);
+  if (history.length >= maxReplies) {
+    replyHistory.set(threadId, history);
+    return false;
+  }
+  history.push(nowMs);
+  replyHistory.set(threadId, history);
+  return true;
+}
+
+function _reset() { replyHistory.clear(); }
+
+function shouldAutoResolve(evaluation, messageAuthorId, reporterId) {
+  if (!evaluation?.resolved) return false;
+  if (messageAuthorId !== reporterId) return false;
+  return true;
+}
+
 async function handleThreadMessage(message) {
   // Only handle messages in threads
   if (!message.channel.isThread()) return false;
@@ -35,90 +59,80 @@ async function handleThreadMessage(message) {
 
   pendingUpdates.set(issue.id, setTimeout(async () => {
     pendingUpdates.delete(issue.id);
-
     try {
-      // Get the updated issue with all context
       const updatedIssue = await firestore.getIssueByThreadId(threadId);
       if (!updatedIssue) return;
 
-      if (updatedIssue.source === 'forum') {
-        // Forum issues: use context evaluator for smart replies
-        const allMessages = [];
-        let lastId;
-        const MAX_CONTEXT_MESSAGES = 500;
-        while (allMessages.length < MAX_CONTEXT_MESSAGES) {
-          const batch = await message.channel.messages.fetch({ limit: 100, ...(lastId && { before: lastId }) });
-          if (batch.size === 0) break;
-          allMessages.push(...batch.values());
-          if (batch.size < 100) break;
-          lastId = batch.last().id;
-        }
-        allMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+      // Gather recent thread messages (cap 500).
+      const allMessages = [];
+      let lastId;
+      const MAX = 500;
+      while (allMessages.length < MAX) {
+        const batch = await message.channel.messages.fetch({ limit: 100, ...(lastId && { before: lastId }) });
+        if (batch.size === 0) break;
+        allMessages.push(...batch.values());
+        if (batch.size < 100) break;
+        lastId = batch.last().id;
+      }
+      allMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
-        const history = buildConversationHistory(allMessages);
-        const evaluation = await evaluateContext(updatedIssue, history);
+      const { buildConversationHistory, collectNewImageUrls } = require('../services/contextEvaluator');
+      const history = buildConversationHistory(allMessages);
+      const newImages = collectNewImageUrls(allMessages, updatedIssue.lastEvaluatedAt);
 
-        // Process triage updates, reclassification, and context complete badge
-        await processEvaluation(message.guild, updatedIssue, updatedIssue.id, evaluation);
-
-        // React to acknowledge instead of sending a message
-        await message.react('✅').catch(() => {});
-      } else {
-        // Non-forum issues: existing behavior (reclassify + generic acknowledgement)
-        // Build full context for reclassification
-        const threadContext = updatedIssue.threadContext || [];
-        const additionalInfo = threadContext.map(c => c.text).join('\n');
-        const fullContext = `Original report: ${updatedIssue.text}\n\nAdditional information from reporter:\n${additionalInfo}`;
-
-        // Reclassify with full context
-        const newClassification = await classifyIssue(fullContext);
-
-        // Update Firestore with new classification
-        await firestore.updateIssueClassification(updatedIssue.id, newClassification);
-
-        // Check if priority or category changed
-        const priorityChanged = newClassification.priority !== updatedIssue.priority;
-        const categoryChanged = newClassification.category !== updatedIssue.category;
-
-        // Always update the triage embed with new context
-        if (updatedIssue.triageMessageId) {
-          const triageChannelName = getConfig('triage_channel') || 'eng-triage';
-          const guild = message.guild;
-          const triageChannel = guild.channels.cache.find(
-            ch => ch.name === triageChannelName && ch.isTextBased()
-          );
-
-          if (triageChannel) {
-            try {
-              const triageMsg = await triageChannel.messages.fetch(updatedIssue.triageMessageId);
-              const updatedEmbed = triage.buildIssueEmbed(
-                { ...updatedIssue, ...newClassification, text: updatedIssue.text },
-                updatedIssue.id
-              );
-
-              // Show additional context from the thread
-              const contextSummary = threadContext.map((c, i) => `${i + 1}. ${c.text.slice(0, 150)}`).join('\n');
-              if (contextSummary) {
-                updatedEmbed.addFields({ name: '💬 Additional Context', value: contextSummary.slice(0, 1024) });
-              }
-
-              if (priorityChanged || categoryChanged) {
-                updatedEmbed.addFields({ name: '🔄 Reclassified', value: 'Updated with additional context from reporter' });
-              } else {
-                updatedEmbed.addFields({ name: '🔄 Updated', value: 'New context added by reporter' });
-              }
-
-              updatedEmbed.setTimestamp();
-              await triageMsg.edit({ embeds: [updatedEmbed] });
-            } catch {
-              // Triage message may have been deleted
-            }
+      // Vision pre-pass: if there are new screenshots since last evaluation,
+      // run agent triage on them to extract text, then pass that text as a hint
+      // to the context evaluator.
+      let visionSummary = null;
+      if (newImages.length > 0) {
+        const agentTriage = require('../services/agentTriage');
+        const { getConfig } = require('../config/config');
+        if (getConfig('agent_enabled') !== false) {
+          try {
+            const result = await agentTriage.triageIssue({
+              text: `(vision-only follow-up for issue ${updatedIssue.id}) describe each screenshot briefly and extract visible error text`,
+              images: newImages,
+              ctx: { firestore, guild: message.guild, channelId: message.channel.id, reporterId: updatedIssue.reporterId },
+            });
+            visionSummary = result?.evidence?.screenshot_text || null;
+          } catch (err) {
+            console.error('thread vision pass failed:', err.message);
           }
         }
-
-        // React to acknowledge instead of sending a message
-        await message.react('✅').catch(() => {});
       }
+
+      const evaluation = await require('../services/contextEvaluator').evaluateContext(
+        updatedIssue,
+        history,
+        visionSummary ? `[Extracted from new screenshots]:\n${visionSummary}` : undefined
+      );
+
+      // processEvaluation updates triage embed + reclassify; pass evaluation as-is.
+      await require('../services/contextEvaluator').processEvaluation(message.guild, updatedIssue, updatedIssue.id, evaluation);
+
+      // Auto-resolve
+      if (shouldAutoResolve(evaluation, message.author.id, updatedIssue.reporterId)) {
+        await firestore.updateIssueResolution(updatedIssue.id, {
+          resolvedBy: 'reporter',
+          resolvedReason: evaluation.resolvedReason,
+        });
+        try {
+          await message.channel.send({ content: 'Marked as resolved — reply if it comes back.' });
+        } catch {}
+        try {
+          await require('../services/contextEvaluator').updateContextBadge(message.guild, { ...updatedIssue, status: 'resolved' }, updatedIssue.id);
+        } catch {}
+      }
+
+      // Smart reply or react
+      if (evaluation.responseMode === 'reply' && evaluation.reply && canBotReplyInThread(threadId)) {
+        try { await message.channel.send({ content: evaluation.reply }); } catch {}
+      } else if (evaluation.responseMode === 'react') {
+        await message.react('✅').catch(() => {});
+      } // ignore: do nothing
+
+      // Bump lastEvaluatedAt so next invocation only fetches newer images.
+      try { await firestore.setIssueLastEvaluatedAt(updatedIssue.id, new Date().toISOString()); } catch {}
     } catch (err) {
       console.error('Error processing thread context update:', err);
     }
@@ -127,4 +141,4 @@ async function handleThreadMessage(message) {
   return true; // Signal that this was an issue thread — don't create a new issue
 }
 
-module.exports = { handleThreadMessage };
+module.exports = { handleThreadMessage, canBotReplyInThread, _reset, shouldAutoResolve };
