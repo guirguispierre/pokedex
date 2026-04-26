@@ -1,7 +1,7 @@
 const { evaluateIssueContext } = require('./openrouter');
 const { classifyIssue } = require('./openrouter');
 const firestore = require('./firestore');
-const { buildIssueEmbed, findTriageChannel } = require('./triage');
+const { buildIssueEmbed, findTriageChannel, postIssueEmbed } = require('./triage');
 
 async function evaluateContext(issue, conversationHistory, extraHint) {
   return evaluateIssueContext(issue, conversationHistory, extraHint);
@@ -31,6 +31,8 @@ async function processEvaluation(guild, issue, issueId, evaluation) {
     const fullContext = `Original report: ${issue.text}\n\nAdditional information:\n${additionalInfo}`;
     const newClassification = await classifyIssue(fullContext);
     await firestore.updateIssueClassification(issueId, newClassification);
+    // Move triage embed to new channel if target flipped (I4)
+    await maybeMoveTriageEmbedAcrossChannels(guild, issue, newClassification, issueId);
   }
 
   // Mark context complete
@@ -82,4 +84,99 @@ function collectNewImageUrls(messages, sinceIso) {
   return urls;
 }
 
-module.exports = { evaluateContext, processEvaluation, updateContextBadge, buildConversationHistory, collectNewImageUrls };
+/**
+ * Handle the conversational side-effects of an evaluator response:
+ * - Auto-resolve when reporter indicates resolution
+ * - responseMode: ignore | react | reply (rate-limited via canReply)
+ *
+ * @param {Message} message - the Discord message that triggered evaluation
+ * @param {Object} issue - the current issue document
+ * @param {string} issueId - the issue id
+ * @param {Object} evaluation - the evaluator return shape (responseMode, resolved, etc.)
+ * @param {Object} options
+ * @param {Function} options.canReply - () => boolean, rate-limit check
+ */
+async function processConversationResponse(message, issue, issueId, evaluation, options = {}) {
+  const canReply = typeof options.canReply === 'function' ? options.canReply : () => true;
+
+  const isReporter = message.author.id === issue.reporterId;
+  const isResolving = evaluation?.resolved && isReporter;
+
+  // Auto-resolve takes precedence over normal responseMode handling.
+  if (isResolving) {
+    try {
+      await firestore.updateIssueResolution(issueId, {
+        resolvedBy: 'reporter',
+        resolvedReason: evaluation.resolvedReason,
+      });
+    } catch (err) {
+      console.error('processConversationResponse: updateIssueResolution failed', err.message);
+    }
+    try {
+      await message.channel.send({ content: 'Marked as resolved — reply if it comes back.' });
+    } catch {}
+    try {
+      await updateContextBadge(message.guild, { ...issue, status: 'resolved' }, issueId);
+    } catch {}
+    return;
+  }
+
+  // responseMode handling
+  if (evaluation?.responseMode === 'reply' && evaluation.reply && canReply()) {
+    try { await message.channel.send({ content: evaluation.reply }); } catch {}
+  } else if (evaluation?.responseMode === 'react') {
+    try { await message.react('✅'); } catch {}
+  }
+  // ignore: do nothing
+}
+
+/**
+ * Detect when a re-classification has flipped the issue's target and move the
+ * triage embed across channels. Used after processEvaluation when reclassify
+ * was true and the new classification has a different target than the stored one.
+ *
+ * @param {Object} guild
+ * @param {Object} oldIssue - previous issue state with old target/triageMessageId
+ * @param {Object} newClassification - { target, priority, category, summary, ... }
+ * @param {string} issueId
+ */
+async function maybeMoveTriageEmbedAcrossChannels(guild, oldIssue, newClassification, issueId) {
+  const oldTarget = oldIssue.target || 'poke_product';
+  const newTarget = newClassification.target || 'poke_product';
+  if (oldTarget === newTarget) return; // No move needed.
+
+  const oldChannel = findTriageChannel(guild, oldTarget);
+  const newChannel = findTriageChannel(guild, newTarget);
+  if (!oldChannel || !newChannel || oldChannel.id === newChannel.id) return;
+
+  // 1. Edit old embed to a "moved" stub.
+  if (oldIssue.triageMessageId) {
+    try {
+      const oldMsg = await oldChannel.messages.fetch(oldIssue.triageMessageId);
+      const stubEmbed = buildIssueEmbed(
+        { ...oldIssue, ...newClassification, summary: `[Moved to #${newChannel.name}]: ${newClassification.summary || oldIssue.summary}` },
+        issueId
+      );
+      await oldMsg.edit({ embeds: [stubEmbed] });
+    } catch (err) {
+      console.error('maybeMoveTriageEmbedAcrossChannels: edit old failed', err.message);
+    }
+  }
+
+  // 2. Post fresh embed in new channel and update issue with new triageMessageId/triageChannelId.
+  try {
+    const updatedIssueShape = { ...oldIssue, ...newClassification, target: newTarget };
+    const newMessageId = await postIssueEmbed(guild, updatedIssueShape, issueId);
+    if (newMessageId) {
+      await firestore.updateIssueFields(issueId, {
+        target: newTarget,
+        triageMessageId: newMessageId,
+        triageChannelId: newChannel.id,
+      });
+    }
+  } catch (err) {
+    console.error('maybeMoveTriageEmbedAcrossChannels: post new failed', err.message);
+  }
+}
+
+module.exports = { evaluateContext, processEvaluation, updateContextBadge, buildConversationHistory, collectNewImageUrls, processConversationResponse, maybeMoveTriageEmbedAcrossChannels };

@@ -2,7 +2,7 @@ const firestore = require('../services/firestore');
 const { classifyIssue } = require('../services/openrouter');
 const triage = require('../services/triage');
 const { getConfig } = require('../config/config');
-const { evaluateContext, processEvaluation, buildConversationHistory } = require('../services/contextEvaluator');
+const { evaluateContext, processEvaluation, buildConversationHistory, processConversationResponse } = require('../services/contextEvaluator');
 
 // Debounce map — wait a bit in case the user sends multiple messages quickly
 const pendingUpdates = new Map();
@@ -109,28 +109,15 @@ async function handleThreadMessage(message) {
 
       const isResolving = shouldAutoResolve(evaluation, message.author.id, updatedIssue.reporterId);
 
-      if (isResolving) {
-        await firestore.updateIssueResolution(updatedIssue.id, {
-          resolvedBy: 'reporter',
-          resolvedReason: evaluation.resolvedReason,
-        });
-        try {
-          await message.channel.send({ content: 'Marked as resolved — reply if it comes back.' });
-        } catch {}
-        try {
-          await require('../services/contextEvaluator').updateContextBadge(message.guild, { ...updatedIssue, status: 'resolved' }, updatedIssue.id);
-        } catch {}
-      } else {
+      if (!isResolving) {
         // Only run the regular evaluation flow when NOT resolving.
         await require('../services/contextEvaluator').processEvaluation(message.guild, updatedIssue, updatedIssue.id, evaluation);
       }
 
-      // Smart reply or react (always — even on resolve, the response matters)
-      if (evaluation.responseMode === 'reply' && evaluation.reply && canBotReplyInThread(threadId)) {
-        try { await message.channel.send({ content: evaluation.reply }); } catch {}
-      } else if (evaluation.responseMode === 'react') {
-        await message.react('✅').catch(() => {});
-      } // ignore: do nothing
+      // Unified auto-resolve + responseMode handling via shared helper
+      await processConversationResponse(message, updatedIssue, updatedIssue.id, evaluation, {
+        canReply: () => canBotReplyInThread(threadId),
+      });
 
       // Bump lastEvaluatedAt so next invocation only fetches newer images.
       try { await firestore.setIssueLastEvaluatedAt(updatedIssue.id, new Date().toISOString()); } catch {}
