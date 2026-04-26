@@ -132,7 +132,7 @@ async function handleClose(interaction) {
 
   const issue = await firestore.getIssueById(issueId);
   if (!issue) return interaction.editReply(`Issue \`${issueId}\` not found.`);
-  if (issue.status === 'closed') return interaction.editReply(`Issue \`${issueId}\` is already closed.`);
+  if (issue.status === 'closed' || issue.status === 'resolved') return interaction.editReply(`Issue \`${issueId}\` is already closed.`);
 
   await firestore.updateIssueStatus(issueId, 'closed', interaction.user.id);
   const updatedIssue = await firestore.getIssueById(issueId);
@@ -511,6 +511,7 @@ async function handleStatus(interaction) {
     .addFields(
       { name: 'Open', value: `**${counts.open}**`, inline: true },
       { name: 'Closed', value: `**${counts.closed}**`, inline: true },
+      { name: 'Resolved', value: `**${counts.resolved}**`, inline: true },
       { name: 'Total', value: `**${counts.total}**`, inline: true },
     );
 
@@ -621,7 +622,7 @@ async function handleContext(interaction) {
   const issue = await firestore.getIssueById(issueId);
   if (!issue) return interaction.editReply(`Issue \`${issueId}\` not found.`);
 
-  if (issue.status === 'closed' || issue.status === 'fixed' || issue.status === 'wontfix') {
+  if (issue.status === 'closed' || issue.status === 'fixed' || issue.status === 'wontfix' || issue.status === 'resolved') {
     return interaction.editReply(`Issue \`${issueId}\` is closed. Reopen it first with \`/issue reopen ${issueId}\`.`);
   }
 

@@ -133,8 +133,10 @@ async function getOpenIssues(limit = 25) {
 async function getIssueCounts() {
   const openSnap = await db.collection('issues').where('status', '==', 'open').get();
   const closedSnap = await db.collection('issues').where('status', '==', 'closed').get();
+  const resolvedSnap = await db.collection('issues').where('status', '==', 'resolved').get();
   const open = openSnap.size;
   const closed = closedSnap.size;
+  const resolved = resolvedSnap.size;
 
   // Count by priority
   const byPriority = {};
@@ -143,7 +145,7 @@ async function getIssueCounts() {
     byPriority[p] = (byPriority[p] || 0) + 1;
   });
 
-  return { open, closed, total: open + closed, byPriority };
+  return { open, closed, resolved, total: open + closed + resolved, byPriority };
 }
 
 async function getAllIssues(limit = 500) {
