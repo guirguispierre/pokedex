@@ -18,7 +18,7 @@ const CHANGELOG = [
       '**`/pokedexbug`** now runs through the agent for richer summary and screenshot reading; user-selected priority and category still win',
       '**`/issue close`** now treats `resolved` as a terminal state — auto-resolution metadata is no longer overwritten',
       '**`/issue status`** displays a Resolved bucket alongside Open and Closed',
-      'New config keys: `pokedex_self_channel`, `agent_enabled` (kill switch back to single-shot triage), `agent_max_tool_calls`, `agent_max_replies_per_thread_per_10m`',
+      'New config keys: `pokedex_owner_id` (set via `POKEDEX_OWNER_ID` env var or `/config set` — the user that gets pinged on capability gaps and critical Pokedex-self bugs), `pokedex_self_channel`, `agent_enabled` (kill switch back to single-shot triage), `agent_max_tool_calls`, `agent_max_replies_per_thread_per_10m`',
     ],
   },
   {
