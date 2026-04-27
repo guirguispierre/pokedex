@@ -2,6 +2,26 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 
 const CHANGELOG = [
   {
+    version: '2.9.0',
+    date: '2026-04-27',
+    changes: [
+      'Pokedex now **reads attached screenshots** — error text, app screen, and visible state are extracted into the triage report',
+      'Pokedex can now **call tools while triaging** — searches existing issues, checks live poke.com status, and reads recent channel messages before classifying',
+      'Bug reports about Pokedex itself ("the bot misclassified", "you\'re doing it wrong") now route to `#pokedex-testing` instead of `eng-triage`',
+      '**Capability-gap backlog** in `#pokedex-testing` — when Pokedex notices something it wishes it could do, it logs it (deduped, count-tracked, owner pinged at thresholds)',
+      'Pokedex now **auto-resolves** issues when the reporter says "solved" / "fixed" / "nvm" — no more zombie open issues',
+      'Smart thread replies — Pokedex now **decides whether to ignore, react ✅, or reply** based on what the message actually says, instead of always reacting',
+      'Per-thread reply rate limit (default 3 / 10 min) so Pokedex can\'t spam an issue thread',
+      'When @Pokedex is a **reply** to another user\'s message, Pokedex now classifies the parent\'s content (the actual complaint), not the reply wrapper',
+      'Casual mentions of Pokedex no longer create issues; direct questions to the bot get a short help reply',
+      'Forum-thread bug reports now get the same agent treatment (vision, target routing, capability gaps)',
+      '**`/pokedexbug`** now runs through the agent for richer summary and screenshot reading; user-selected priority and category still win',
+      '**`/issue close`** now treats `resolved` as a terminal state — auto-resolution metadata is no longer overwritten',
+      '**`/issue status`** displays a Resolved bucket alongside Open and Closed',
+      'New config keys: `pokedex_self_channel`, `agent_enabled` (kill switch back to single-shot triage), `agent_max_tool_calls`, `agent_max_replies_per_thread_per_10m`',
+    ],
+  },
+  {
     version: '2.8.2',
     date: '2026-04-17',
     changes: [
