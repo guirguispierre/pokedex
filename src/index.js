@@ -424,19 +424,15 @@ async function handleButtonInteraction(interaction) {
     embed.setColor(actionInfo.color);
     embed.addFields({ name: actionInfo.label, value: `by ${user.username} — <t:${Math.floor(Date.now() / 1000)}:R>` });
 
-    // Disable buttons after action and highlight the one clicked
+    // Keep every button enabled. Status is a transition state — a triager must be
+    // able to move Acknowledged → Fixed later, still click Delete / Gather Context,
+    // or correct a misclick. We re-render the same buttons (preserving their styles)
+    // and rely on the appended embed field above as the running status log.
     // ActionRowBuilder, ButtonBuilder already imported at top
     const updatedRows = message.components.map(row => {
       const updatedRow = new ActionRowBuilder();
       for (const component of row.components) {
-        const btn = ButtonBuilder.from(component);
-        if (component.customId === customId) {
-          btn.setDisabled(false);
-          btn.setStyle(2);
-        } else {
-          btn.setDisabled(true);
-        }
-        updatedRow.addComponents(btn);
+        updatedRow.addComponents(ButtonBuilder.from(component));
       }
       return updatedRow;
     });

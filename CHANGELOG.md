@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.11.1] - 2026-06-04
+
+### Fixed
+- Triage embed buttons no longer disable each other. Clicking a status (Acknowledged / Fixed / Won't Fix / Escalate) used to grey out **every** other button — including Delete and Gather Context — so a triager couldn't transition state again (e.g. Acknowledged → Fixed) or correct a misclick. All buttons now stay active; each click appends a status line to the embed as a running log.
+
 ## [2.11.0] - 2026-05-25
 
 ### Added

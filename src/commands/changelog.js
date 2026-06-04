@@ -2,6 +2,16 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 
 const CHANGELOG = [
   {
+    version: '2.11.1',
+    date: '2026-06-04',
+    headline: 'Triage buttons stay clickable after you press one.',
+    sections: {
+      fixed: [
+        'Triage buttons no longer disable each other. Pressing a status (Acknowledged / Fixed / Won\'t Fix / Escalate) used to grey out **every** other button — including Delete and Gather Context — so you couldn\'t change the state again or fix a misclick. All buttons stay active now, and each press adds a status line to the embed as a log',
+      ],
+    },
+  },
+  {
     version: '2.11.0',
     date: '2026-05-25',
     headline: 'Ticket #s up front; add more context after filing.',
