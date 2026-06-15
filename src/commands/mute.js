@@ -43,6 +43,14 @@ const commandData = new SlashCommandBuilder()
       ))
   .addStringOption(opt => opt.setName('reason').setDescription('Reason for mute').setRequired(false));
 
+// Reusable Discord-timeout path (also used by the scam scanner). Returns false
+// without calling timeout when the member is missing or not moderatable.
+async function applyTimeout(member, durationMs, reason) {
+  if (!member || !member.moderatable) return false;
+  await member.timeout(durationMs, reason);
+  return true;
+}
+
 async function execute(interaction) {
   await interaction.deferReply();
   const target = interaction.options.getUser('user');
@@ -55,7 +63,7 @@ async function execute(interaction) {
   if (!member.moderatable) return interaction.editReply('I cannot mute this user. They may have higher permissions than me.');
 
   try {
-    await member.timeout(durationMs, reason);
+    await applyTimeout(member, durationMs, reason);
   } catch (err) {
     console.error('Failed to mute:', err);
     return interaction.editReply('Failed to mute this user. Please check bot permissions and try again.');
@@ -102,4 +110,4 @@ async function execute(interaction) {
   await interaction.editReply({ embeds: [embed] });
 }
 
-module.exports = { data: commandData, execute };
+module.exports = { data: commandData, execute, applyTimeout };
