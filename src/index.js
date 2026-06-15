@@ -9,53 +9,25 @@ const { handleThreadMessage } = require('./triggers/thread');
 const { handleForumPost } = require('./triggers/forum');
 const { handleAutoScrape } = require('./triggers/autoscrape');
 // pending poller replaced by instant webhook message detection
-const configCommand = require('./commands/config');
-const helpCommand = require('./commands/help');
-const changelogCommand = require('./commands/changelog');
-const feedbackCommand = require('./commands/feedback');
-const issueCommand = require('./commands/issue');
-const pingCommand = require('./commands/ping');
-const lockCommand = require('./commands/lock');
-const unlockCommand = require('./commands/unlock');
-const leaderboardCommand = require('./commands/leaderboard');
-const pokedexCommand = require('./commands/pokedex');
-const pokedexbugCommand = require('./commands/pokedexbug');
-const typechartCommand = require('./commands/typechart');
-const serverinfoCommand = require('./commands/serverinfo');
-const afkCommand = require('./commands/afk');
-const levelCommand = require('./commands/level');
-const warnCommand = require('./commands/warn');
-const timeoutCommand = require('./commands/timeout');
-const kickCommand = require('./commands/kick');
-const banCommand = require('./commands/ban');
-const purgeCommand = require('./commands/purge');
-const slowmodeCommand = require('./commands/slowmode');
-const deletethreadCommand = require('./commands/deletethread');
-const mergeCommand = require('./commands/merge');
-const starboardCommand = require('./commands/starboard');
-const pollCommand = require('./commands/poll');
-const welcomeCommand = require('./commands/welcome');
-const reactionroleCommand = require('./commands/reactionrole');
-const giveawayCommand = require('./commands/giveaway');
-const suggestCommand = require('./commands/suggest');
-const creatorCommand = require('./commands/creator');
-const rickandmortyCommand = require('./commands/rickandmorty');
-const automodCommand = require('./commands/automod');
 const automod = require('./services/automod');
-const feedbackTriageCommand = require('./commands/feedbacktriage');
-const recipesCommand = require('./commands/recipes');
-const autoscrapeCommand = require('./commands/autoscrape');
-const statusCommand = require('./commands/status');
-const excludeCommand = require('./commands/exclude');
-const excludeContextCommand = require('./commands/excludeContext');
-const addcontextCommand = require('./commands/addcontext');
-const addContextMessageCommand = require('./commands/addContextMessage');
-const backfillNumbersCommand = require('./commands/backfillnumbers');
-const lockallCommand = require('./commands/lockall');
-const unlockallCommand = require('./commands/unlockall');
-const muteCommand = require('./commands/mute');
-const unmuteCommand = require('./commands/unmute');
-const colorCommand = require('./commands/color');
+const { loadCommands, toRegistrationBody } = require('./commandLoader');
+
+// All slash + context-menu commands, loaded once at startup and keyed by their
+// registered name (data.name) — which is what interaction.commandName matches.
+const commandMap = loadCommands();
+
+// Named handles for the command modules whose extra exports power the event
+// listeners and button/context-menu handlers further down this file.
+const afkCommand = commandMap.get('afk');
+const levelCommand = commandMap.get('level');
+const starboardCommand = commandMap.get('starboard');
+const reactionroleCommand = commandMap.get('reactionrole');
+const welcomeCommand = commandMap.get('welcome');
+const changelogCommand = commandMap.get('changelog');
+const statusCommand = commandMap.get('status');
+const recipesCommand = commandMap.get('recipes');
+const excludeContextCommand = commandMap.get('Exclude from Pokedex');
+const addContextMessageCommand = commandMap.get('Add to Pokedex context');
 const { createFetcher } = require('./services/statusFetcher');
 const { createStore: createStatusStore } = require('./services/statusStore');
 const { createPoller: createStatusPoller } = require('./services/statusPoller');
@@ -84,7 +56,7 @@ async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   await rest.put(
     Routes.applicationGuildCommands(process.env.DISCORD_APP_ID, process.env.DISCORD_GUILD_ID),
-    { body: [configCommand.data.toJSON(), helpCommand.data.toJSON(), changelogCommand.data.toJSON(), feedbackCommand.data.toJSON(), issueCommand.data.toJSON(), pingCommand.data.toJSON(), lockCommand.data.toJSON(), unlockCommand.data.toJSON(), leaderboardCommand.data.toJSON(), pokedexCommand.data.toJSON(), pokedexbugCommand.data.toJSON(), typechartCommand.data.toJSON(), serverinfoCommand.data.toJSON(), afkCommand.data.toJSON(), levelCommand.data.toJSON(), warnCommand.data.toJSON(), timeoutCommand.data.toJSON(), kickCommand.data.toJSON(), banCommand.data.toJSON(), purgeCommand.data.toJSON(), slowmodeCommand.data.toJSON(), deletethreadCommand.data.toJSON(), mergeCommand.data.toJSON(), starboardCommand.data.toJSON(), pollCommand.data.toJSON(), welcomeCommand.data.toJSON(), reactionroleCommand.data.toJSON(), giveawayCommand.data.toJSON(), suggestCommand.data.toJSON(), creatorCommand.data.toJSON(), rickandmortyCommand.data.toJSON(), automodCommand.data.toJSON(), feedbackTriageCommand.data.toJSON(), recipesCommand.data.toJSON(), autoscrapeCommand.data.toJSON(), statusCommand.data.toJSON(), excludeCommand.data.toJSON(), excludeContextCommand.data.toJSON(), addcontextCommand.data.toJSON(), addContextMessageCommand.data.toJSON(), backfillNumbersCommand.data.toJSON(), lockallCommand.data.toJSON(), unlockallCommand.data.toJSON(), muteCommand.data.toJSON(), unmuteCommand.data.toJSON(), colorCommand.data.toJSON()] },
+    { body: toRegistrationBody(commandMap) },
   );
   console.log('Slash commands registered.');
 }
@@ -278,8 +250,7 @@ client.on('interactionCreate', async (interaction) => {
 
   // --- Autocomplete interactions ---
   if (interaction.isAutocomplete()) {
-    const commands = { issue: issueCommand, merge: mergeCommand, warn: warnCommand, suggest: suggestCommand, giveaway: giveawayCommand, 'feedback-triage': feedbackTriageCommand, recipes: recipesCommand, config: configCommand, pokedex: pokedexCommand, automod: automodCommand };
-    const command = commands[interaction.commandName];
+    const command = commandMap.get(interaction.commandName);
     if (command?.autocomplete) {
       try {
         await command.autocomplete(interaction);
@@ -303,8 +274,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (!interaction.isChatInputCommand()) return;
-  const commands = { config: configCommand, help: helpCommand, changelog: changelogCommand, feedback: feedbackCommand, issue: issueCommand, ping: pingCommand, lock: lockCommand, unlock: unlockCommand, leaderboard: leaderboardCommand, pokedex: pokedexCommand, pokedexbug: pokedexbugCommand, typechart: typechartCommand, serverinfo: serverinfoCommand, afk: afkCommand, level: levelCommand, warn: warnCommand, timeout: timeoutCommand, kick: kickCommand, ban: banCommand, purge: purgeCommand, slowmode: slowmodeCommand, deletethread: deletethreadCommand, merge: mergeCommand, starboard: starboardCommand, poll: pollCommand, welcome: welcomeCommand, reactionrole: reactionroleCommand, giveaway: giveawayCommand, suggest: suggestCommand, creator: creatorCommand, rickandmorty: rickandmortyCommand, automod: automodCommand, 'feedback-triage': feedbackTriageCommand, recipes: recipesCommand, autoscrape: autoscrapeCommand, status: statusCommand, exclude: excludeCommand, addcontext: addcontextCommand, 'backfill-numbers': backfillNumbersCommand, lockall: lockallCommand, unlockall: unlockallCommand, mute: muteCommand, unmute: unmuteCommand, color: colorCommand };
-  const command = commands[interaction.commandName];
+  const command = commandMap.get(interaction.commandName);
   if (!command) return;
 
   try {
