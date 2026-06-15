@@ -171,6 +171,239 @@ function planAction(verdict, { threshold }, opts = {}) {
   return { action: 'none', delete: false, mute: false, recordHash: false, alert: false };
 }
 
+// --- Vision scan (paid path) ---
+
+const SCAM_SCAN_SYSTEM_PROMPT = `You are an image-safety classifier for a Discord community for poke.com.
+Look at the attached image and decide whether it is a SCAM image — e.g. fake crypto/NFT airdrops or giveaways, free-Nitro/gift-card bait, phishing or wallet-drainer screenshots, impersonation of staff or brands, "double your money" schemes, or fake login/QR pages.
+Ordinary memes, screenshots, photos, art, and product images are NOT scams.
+Return ONLY strict JSON, no prose, no code fences:
+{"isScam": boolean, "confidence": number between 0 and 1, "category": string, "reason": string}`;
+
+// Throws on API error/timeout — the caller fails open.
+async function scanImage(imageUrl, config) {
+  const res = await callWithTools({
+    messages: [
+      { role: 'system', content: SCAM_SCAN_SYSTEM_PROMPT },
+      { role: 'user', content: 'Analyze the attached image and decide if it is a scam.' },
+    ],
+    images: [imageUrl],
+    model: config.visionModel,
+  });
+  return parseVerdict(res.content);
+}
+
+// --- Image decode (sharp lazy-required so planner tests never load the binary) ---
+
+async function fetchImageBytes(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`fetch image failed: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function computeImageHash(buffer) {
+  const sharp = require('sharp');
+  const { data, info } = await sharp(buffer)
+    .resize(9, 8, { fit: 'fill' })
+    .grayscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  // grayscale().raw() may emit info.channels bytes/pixel (b-w keeps R=G=B); take
+  // the first channel of each pixel to get the 72 grayscale values.
+  const pixels = [];
+  for (let i = 0; i < data.length; i += info.channels) pixels.push(data[i]);
+  return phash.dhashFromGrayscale(pixels);
+}
+
+// --- Logging / alerts ---
+
+function resolveChannel(guild, idOrNull) {
+  if (!idOrNull) return null;
+  return guild.channels.cache.get(idOrNull) || null;
+}
+
+// Posts to the review channel for EVERY scan and every decode/scan failure.
+async function logScan(guild, config, { userId, username, channelId, imageUrl, verdict, acted, error }) {
+  const channel = resolveChannel(guild, config.reviewChannelId);
+  if (!channel) return;
+  const { EmbedBuilder } = require('discord.js');
+  const embed = new EmbedBuilder()
+    .setTitle('🔍 Scam Scan')
+    .setColor(error ? 0x95a5a6 : acted ? 0xe74c3c : 0x2ecc71)
+    .addFields(
+      { name: 'User', value: `<@${userId}> (${username})`, inline: true },
+      { name: 'Channel', value: `<#${channelId}>`, inline: true },
+      { name: 'Acted', value: acted ? 'Yes — removed & muted' : 'No', inline: true },
+    )
+    .setTimestamp();
+  if (error) {
+    embed.addFields({ name: 'Scan error (failed open)', value: String(error).slice(0, 1024) });
+  } else if (verdict) {
+    embed.addFields({ name: 'Verdict', value: '```json\n' + JSON.stringify(verdict).slice(0, 1000) + '\n```' });
+  }
+  if (imageUrl) embed.setImage(imageUrl);
+  try { await channel.send({ embeds: [embed] }); } catch (err) { console.error('scamscan: review log failed:', err.message); }
+}
+
+async function alertAdmins(guild, config, { userId, username, channelId, category, reason, confidence, imageUrl, seenChannels }) {
+  const channel = resolveChannel(guild, config.adminChannelId);
+  if (!channel) return;
+  const { EmbedBuilder } = require('discord.js');
+  const seen = (seenChannels || []).map(c => `<#${c}>`).join(', ') || `<#${channelId}>`;
+  const embed = new EmbedBuilder()
+    .setTitle('🚨 Scam image removed')
+    .setColor(0x8b0000)
+    .addFields(
+      { name: 'User', value: `<@${userId}> (${username})`, inline: true },
+      { name: 'Posted in', value: `<#${channelId}>`, inline: true },
+      { name: 'Category', value: category || 'unknown', inline: true },
+      { name: 'Confidence', value: confidence != null ? `${Math.round(confidence * 100)}%` : 'n/a (repost)', inline: true },
+      { name: 'Reason', value: (reason || 'n/a').slice(0, 1024) },
+      { name: 'Seen in channels', value: seen.slice(0, 1024) },
+    )
+    .setTimestamp();
+  if (imageUrl) embed.setImage(imageUrl);
+  try { await channel.send({ embeds: [embed] }); } catch (err) { console.error('scamscan: admin alert failed:', err.message); }
+}
+
+async function dmUser(user, guild, reason) {
+  try {
+    const { EmbedBuilder } = require('discord.js');
+    await user.send({ embeds: [new EmbedBuilder()
+      .setTitle(`🚫 Your image was removed in ${guild.name}`)
+      .setColor(0xe74c3c)
+      .setDescription(`It was flagged as a scam: **${reason || 'scam image'}**. If this was a mistake, contact the moderators.`)
+      .setTimestamp()] });
+  } catch {
+    // Can't DM — fine.
+  }
+}
+
+// --- Action + main handler ---
+
+const { applyTimeout } = require('../commands/mute');
+
+// Executes a 'scam' plan: delete, mute, record/extend hash, alert, optional DM,
+// review log. Each side effect is independently guarded so one failure (e.g. the
+// message was already deleted) does not abort the rest.
+async function takeAction(message, config, member, plan, ctx) {
+  const { userId, username, channelId, imageUrl, hash, verdict, matchedKnownScam } = ctx;
+
+  try { await message.delete(); } catch { /* already gone / no perms */ }
+
+  if (plan.mute) {
+    try { await applyTimeout(member, config.muteMs, `Scam image: ${ctx.reason || 'flagged'}`); }
+    catch (err) { console.error('scamscan: mute failed:', err.message); }
+  }
+
+  let seenChannels = [channelId];
+  if (matchedKnownScam) {
+    try { await addHashSeenChannel(matchedKnownScam.id, channelId); } catch (err) { console.error('scamscan: seen-channel update failed:', err.message); }
+    seenChannels = Array.from(new Set([...(matchedKnownScam.seenChannels || []), channelId]));
+  } else if (plan.recordHash) {
+    try {
+      await recordScamHash({
+        hash, category: ctx.category, reason: ctx.reason,
+        confidence: verdict ? verdict.confidence : null,
+        channelId, userId, expiresAt: Date.now() + config.hashTtlMs,
+      });
+    } catch (err) { console.error('scamscan: hash record failed:', err.message); }
+  }
+
+  if (plan.alert) {
+    await alertAdmins(message.guild, config, {
+      userId, username, channelId,
+      category: ctx.category, reason: ctx.reason,
+      confidence: verdict ? verdict.confidence : null,
+      imageUrl, seenChannels,
+    });
+  }
+
+  if (config.dmOnAction) await dmUser(message.author, message.guild, ctx.reason);
+
+  await logScan(message.guild, config, { userId, username, channelId, imageUrl, verdict: verdict || { repost: true, category: ctx.category }, acted: true });
+
+  return 'scam';
+}
+
+async function handleMessage(message) {
+  if (message.author.bot || !message.guild) return null;
+  if (!message.attachments || message.attachments.size === 0) return null;
+
+  const config = await getScamScanConfig();
+  if (!config.scamScanEnabled) return null;
+  if (!config.monitorChannelIds.includes(message.channel.id)) return null;
+
+  const scannable = selectScannableAttachments(message.attachments, {
+    minDimension: config.minDimension,
+    maxAttachments: config.maxAttachments,
+  });
+  if (scannable.length === 0) return null;
+
+  const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+  if (isExemptRole(member, config.exemptRoleIds)) return null;
+
+  const now = Date.now();
+  const newMember = isNewMember(member, now, config.joinWindowMs);
+  const known = await getKnownScamHashes(now);
+
+  // Nothing the cheap path can match and the paid path only runs for new members.
+  if (known.length === 0 && !newMember) return null;
+
+  const userId = message.author.id;
+  const username = message.author.username;
+  const channelId = message.channel.id;
+
+  for (const att of scannable) {
+    const imageUrl = att.url;
+
+    // Decode for the perceptual hash. Decode failure -> log, skip this image.
+    let hash;
+    try {
+      hash = await computeImageHash(await fetchImageBytes(imageUrl));
+    } catch (err) {
+      await logScan(message.guild, config, { userId, username, channelId, imageUrl, error: `decode: ${err.message}` });
+      continue;
+    }
+
+    // Repost short-circuit (applies to everyone) — no API call.
+    const matchedKnownScam = matchKnownScam(hash, known, config.hammingThreshold);
+    if (matchedKnownScam) {
+      const plan = planAction(null, { threshold: config.threshold }, { matchedKnownScam });
+      return await takeAction(message, config, member, plan, {
+        userId, username, channelId, imageUrl, hash,
+        verdict: null, matchedKnownScam,
+        category: matchedKnownScam.category, reason: matchedKnownScam.reason || 'known scam image (repost)',
+      });
+    }
+
+    // Paid path: new members only.
+    if (!newMember) continue;
+
+    let verdict;
+    try {
+      verdict = await scanImage(imageUrl, config);
+    } catch (err) {
+      // Fail open — never mute/delete on API error.
+      await logScan(message.guild, config, { userId, username, channelId, imageUrl, error: `scan: ${err.message}` });
+      continue;
+    }
+
+    const plan = planAction(verdict, { threshold: config.threshold }, {});
+    if (plan.action !== 'scam') {
+      await logScan(message.guild, config, { userId, username, channelId, imageUrl, verdict, acted: false });
+      continue;
+    }
+
+    return await takeAction(message, config, member, plan, {
+      userId, username, channelId, imageUrl, hash,
+      verdict, matchedKnownScam: null,
+      category: verdict.category, reason: verdict.reason || 'scam image',
+    });
+  }
+
+  return null;
+}
+
 module.exports = {
   DEFAULT_CONFIG,
   getScamScanConfig,
@@ -186,4 +419,7 @@ module.exports = {
   parseVerdict,
   matchKnownScam,
   planAction,
+  scanImage,
+  computeImageHash,
+  handleMessage,
 };
