@@ -70,6 +70,39 @@ async function removeConfigArrayItem(field, id) {
   cachedConfig = null;
 }
 
+// --- Known-scam hash store (scamHashes collection, global/single-guild) ---
+
+// Returns non-expired records as { id, ...data }. The scam-hash set is small, so
+// an in-memory Hamming compare against all of them is cheap.
+async function getKnownScamHashes(now) {
+  try {
+    const snap = await HASHES().where('expiresAt', '>', now).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch {
+    return [];
+  }
+}
+
+async function recordScamHash({ hash, category, reason, confidence, channelId, userId, expiresAt }) {
+  await HASHES().add({
+    hash,
+    category: category || 'unknown',
+    reason: reason || '',
+    confidence: typeof confidence === 'number' ? confidence : null,
+    seenChannels: channelId ? [channelId] : [],
+    firstUserId: userId || null,
+    expiresAt,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+async function addHashSeenChannel(docId, channelId) {
+  await HASHES().doc(docId).set(
+    { seenChannels: admin.firestore.FieldValue.arrayUnion(channelId) },
+    { merge: true },
+  );
+}
+
 // --- Pure planners (unit-tested) ---
 
 function isNewMember(member, now, windowMs) {
@@ -144,6 +177,9 @@ module.exports = {
   updateScamScanConfig,
   addConfigArrayItem,
   removeConfigArrayItem,
+  getKnownScamHashes,
+  recordScamHash,
+  addHashSeenChannel,
   isNewMember,
   isExemptRole,
   selectScannableAttachments,
