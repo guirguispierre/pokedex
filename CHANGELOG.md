@@ -5,6 +5,12 @@
 ### Removed
 - **Fun commands** — `/pokedex`, `/typechart`, `/rickandmorty`, and `/creator` have been removed. They were novelty/off-topic for a bug-triage bot and are no longer registered.
 - **`/timeout`** — removed as redundant with `/mute` and `/unmute` (v2.12.0), which are friendlier wrappers over the same Discord timeout. Use `/mute <user> <duration>` instead.
+- **Colocated sub-projects** — `dashboard-vercel`, `forums-site`, `recipes-site`, `pokedex-mcp`, and `pokedex-mcp-cf` were extracted to their own standalone repositories (history preserved) and removed from this repo. The bot never referenced their code. The in-bot Express dashboard (`src/dashboard/`) and recipe ingestion (`src/recipes/`) are unaffected.
+
+### Internal
+- **Command autoloader** — `src/index.js` now loads all slash + context-menu commands once at startup via a single `fs.readdirSync` loader (`src/commandLoader.js`) and derives the Discord registration payload from that map, replacing the hand-maintained per-command requires, registration array, and per-interaction dispatch map.
+- **Single test runner** — consolidated on `node --test`; ported the still-valuable specs out of the legacy `vitest` `tests/` directory into `test/` and removed `tests/`, the `test:legacy` script, and the `vitest` devDependency. Suite is green at 340 tests.
+- **CI** — added a GitHub Actions workflow that runs `npm ci` + `npm test` on Node 22 and 24 for every push to `main` and every pull request.
 
 ## [2.12.0] - 2026-06-04
 
