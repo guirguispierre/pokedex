@@ -2,6 +2,20 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 
 const CHANGELOG = [
   {
+    version: '2.13.0',
+    date: '2026-06-14',
+    headline: 'Vision-based image scam scanner with repost nuking.',
+    sections: {
+      new: [
+        '**Image scam scanner** — new members\' images in monitored channels are scanned by an OpenRouter vision model. Every scan is logged to a review channel; confirmed scams are deleted, the user muted, and admins alerted. Set it up with `/automod scamscan` (off until channels are configured)',
+        '**Repost nuking** — confirmed scam images are fingerprinted (perceptual hash), so the same image reposted anywhere is removed instantly without a second scan, even if re-encoded or resized',
+      ],
+      internal: [
+        'Scanner fails open (model/Discord errors never mute or delete), reuses the `/mute` timeout path, and ships with new pure unit-tested helpers for hashing, the new-member window, verdict parsing, and the action planner',
+      ],
+    },
+  },
+  {
     version: '2.12.0',
     date: '2026-06-04',
     headline: 'Server lockdown, mute/unmute, scam blocking, and color roles.',

@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.13.0] - 2026-06-14
+
+### Added
+- **Image scam scanner** — when a recently-joined member posts an image in a monitored channel, Pokedex scans it with an OpenRouter vision model. Every scan is logged to a review channel. If it's a scam (confidence ≥ threshold), the message is deleted, the user is muted, and admins are alerted with the evidence. Configure via `/automod scamscan enable|monitor|review|admin|exempt|settings|dm|model|config`. Off by default until channels are set. Requires **Manage Server**.
+- **Repost nuking via perceptual hash** — confirmed scam images are fingerprinted with a dHash. If the same image (even re-encoded or resized) is reposted in any channel by anyone, it's removed immediately without a second paid scan, and the admin alert lists every channel the image has been seen in. Fingerprints expire after 30 days.
+
+### Internal
+- New pure, unit-tested helpers: `dhashFromGrayscale`/`hammingDistance`/`isHashMatch` (`phash.js`), and `isNewMember`/`isExemptRole`/`selectScannableAttachments`/`parseVerdict`/`matchKnownScam`/`planAction` (`scamscan.js`). New service `scamscan.js` (config in `automod/scamscan`, fingerprints in the `scamHashes` collection) following the lockdown Firestore error contract. Extracted `applyTimeout` from `mute.js` so the scanner reuses the existing Discord-timeout path. Added `sharp` for image decode. Scans **fail open**: API/Discord errors never mute or delete.
+
 ## [2.12.0] - 2026-06-04
 
 ### Added
