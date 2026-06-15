@@ -8,8 +8,7 @@ const commandData = new SlashCommandBuilder()
   .addStringOption(opt =>
     opt.setName('pokemon')
       .setDescription('Pokemon name or number')
-      .setRequired(true)
-      .setAutocomplete(true));
+      .setRequired(true));
 
 const TYPE_COLORS = {
   normal: 0xa8a878, fire: 0xf08030, water: 0x6890f0, electric: 0xf8d030,
@@ -119,35 +118,4 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-let pokemonListPromise = null;
-
-function loadPokemonList() {
-  if (!pokemonListPromise) {
-    pokemonListPromise = fetch(`${POKEAPI_URL}/pokemon?limit=1025`)
-      .then(res => {
-        if (!res.ok) throw new Error(`PokeAPI ${res.status}`);
-        return res.json();
-      })
-      .then(data => data.results.map((p, i) => ({ name: p.name, id: i + 1 })))
-      .catch(() => {
-        pokemonListPromise = null; // allow retry on next call
-        return [];
-      });
-  }
-  return pokemonListPromise;
-}
-
-async function autocomplete(interaction) {
-  const focused = interaction.options.getFocused().toLowerCase();
-  const list = await loadPokemonList();
-  if (!focused) {
-    return interaction.respond(list.slice(0, 25).map(p => ({ name: `#${p.id} ${capitalize(p.name)}`, value: p.name })));
-  }
-  const filtered = list
-    .filter(p => p.name.includes(focused) || String(p.id).startsWith(focused))
-    .slice(0, 25)
-    .map(p => ({ name: `#${p.id} ${capitalize(p.name)}`, value: p.name }));
-  await interaction.respond(filtered);
-}
-
-module.exports = { data: commandData, execute, autocomplete };
+module.exports = { data: commandData, execute };

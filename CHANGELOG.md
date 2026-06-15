@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+- **Fun commands** — `/pokedex`, `/typechart`, `/rickandmorty`, and `/creator` have been removed. They were novelty/off-topic for a bug-triage bot and are no longer registered.
+
 ## [2.12.0] - 2026-06-04
 
 ### Added

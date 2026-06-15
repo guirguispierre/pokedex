@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokedex — Community Recipes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #f0c840;
+      --gold-soft: #d4a828;
+      --gold-glow: rgba(240,200,64,0.12);
+      --gold-glow-strong: rgba(240,200,64,0.25);
+      --bg: #070a10;
+      --glass: rgba(255,255,255,0.035);
+      --glass-border: rgba(255,255,255,0.06);
+      --glass-hover: rgba(255,255,255,0.06);
+      --glass-strong: rgba(255,255,255,0.055);
+      --text: #e4e8f0;
+      --text-dim: #7a82a0;
+      --text-muted: #3c4260;
+      --critical: #f43f5e;
+      --high: #f97316;
+      --medium: #eab308;
+      --low: #10b981;
+      --blue: #6366f1;
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* === AMBIENT BACKGROUND === */
+    .ambient {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.4;
+      animation: float 20s ease-in-out infinite;
+    }
+
+    .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(240,200,64,0.15), transparent 70%); top: -200px; left: -100px; }
+    .orb-2 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(99,102,241,0.1), transparent 70%); bottom: -150px; right: -100px; animation-delay: -7s; }
+    .orb-3 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(16,185,129,0.08), transparent 70%); top: 40%; left: 50%; animation-delay: -14s; }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(30px, -20px) scale(1.05); }
+      66% { transform: translate(-20px, 15px) scale(0.95); }
+    }
+
+    .glass {
+      background: var(--glass);
+      backdrop-filter: blur(40px) saturate(150%);
+      -webkit-backdrop-filter: blur(40px) saturate(150%);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+    }
+
+    /* === LAYOUT === */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* === HEADER === */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-soft) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header .subtitle {
+      color: var(--text-dim);
+      font-size: 0.95rem;
+      margin-top: 0.25rem;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .back-link {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--gold); }
+
+    /* === STATS BAR === */
+    .stats-bar {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      padding: 1rem 1.5rem;
+      flex: 1;
+      min-width: 140px;
+      text-align: center;
+    }
+
+    .stat-card .number {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--gold);
+    }
+
+    .stat-card .label {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.25rem;
+    }
+
+    /* === SEARCH & FILTERS === */
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 240px;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      background: var(--glass);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-box::placeholder { color: var(--text-muted); }
+    .search-box:focus { border-color: var(--gold); }
+
+    .filter-btn {
+      padding: 0.6rem 1rem;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      background: var(--glass);
+      color: var(--text-dim);
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .filter-btn:hover { background: var(--glass-hover); color: var(--text); border-color: rgba(255,255,255,0.1); }
+    .filter-btn.active { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-soft); }
+
+    .tag-filters {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .tag-chip {
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      border: 1px solid var(--glass-border);
+      background: var(--glass);
+      color: var(--text-dim);
+      transition: all 0.2s;
+    }
+    .tag-chip:hover { color: var(--text); background: var(--glass-hover); }
+    .tag-chip.active { background: var(--gold-glow); color: var(--gold); border-color: var(--gold-soft); }
+
+    /* === RECIPE GRID === */
+    .recipe-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+
+    .recipe-card {
+      padding: 1.25rem;
+      transition: all 0.25s;
+      cursor: pointer;
+      text-decoration: none;
+      display: block;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .recipe-card:hover {
+      background: var(--glass-hover);
+      border-color: rgba(255,255,255,0.1);
+      transform: translateY(-2px);
+    }
+
+    .recipe-card .title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .recipe-card .description {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 0.75rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .recipe-card .meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .recipe-card .source-badge {
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: var(--gold-glow);
+      color: var(--gold);
+      border: 1px solid rgba(240,200,64,0.15);
+    }
+
+    .recipe-card .shares {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .recipe-card .shares strong {
+      color: var(--text-dim);
+    }
+
+    .recipe-card .author {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .recipe-card .tags {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      margin-top: 0.6rem;
+    }
+
+    .recipe-card .tag {
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      background: rgba(99,102,241,0.1);
+      color: var(--blue);
+      border: 1px solid rgba(99,102,241,0.15);
+    }
+
+    .recipe-card .refer-code-line {
+      margin-bottom: 0.5rem;
+    }
+
+    .recipe-card .refer-code code {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.78rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      background: rgba(240,200,64,0.08);
+      color: var(--gold-soft);
+      border: 1px solid rgba(240,200,64,0.12);
+      user-select: all;
+    }
+
+    .recipe-card .link-icon {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      transition: color 0.2s;
+    }
+    .recipe-card:hover .link-icon { color: var(--gold); }
+
+    /* === EMPTY STATE === */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-dim);
+    }
+
+    .empty-state h2 {
+      font-size: 1.4rem;
+      margin-bottom: 0.5rem;
+      color: var(--text);
+    }
+
+    .empty-state p {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+
+    /* === LOADING === */
+    .loading {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-dim);
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--glass-border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 640px) {
+      .container { padding: 1rem; }
+      .header h1 { font-size: 1.5rem; }
+      .recipe-grid { grid-template-columns: 1fr; }
+      .stat-card { min-width: 100px; padding: 0.75rem 1rem; }
+      .stat-card .number { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1>Community Recipes</h1>
+        <div class="subtitle">Shared by the community in #show-and-tell</div>
+      </div>
+      <div class="header-right">
+        <a href="/" class="back-link">&larr; Issue Dashboard</a>
+      </div>
+    </div>
+
+    <div class="stats-bar" id="stats">
+      <div class="stat-card glass">
+        <div class="number" id="stat-total">-</div>
+        <div class="label">Total Recipes</div>
+      </div>
+      <div class="stat-card glass">
+        <div class="number" id="stat-sources">-</div>
+        <div class="label">Sources</div>
+      </div>
+      <div class="stat-card glass">
+        <div class="number" id="stat-contributors">-</div>
+        <div class="label">Contributors</div>
+      </div>
+      <div class="stat-card glass">
+        <div class="number" id="stat-tags">-</div>
+        <div class="label">Tags</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <input type="text" class="search-box" id="search" placeholder="Search recipes by name, tag, or source...">
+    </div>
+
+    <div class="tag-filters" id="tag-filters"></div>
+
+    <div id="content">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>Loading recipes...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allRecipes = [];
+    let activeTag = null;
+    let activeSource = null;
+
+    async function loadRecipes() {
+      try {
+        const res = await fetch('/api/recipes?limit=500');
+        const data = await res.json();
+        allRecipes = data.recipes || [];
+        updateStats();
+        buildTagFilters();
+        renderRecipes();
+      } catch (err) {
+        document.getElementById('content').innerHTML = `
+          <div class="empty-state">
+            <h2>Failed to load recipes</h2>
+            <p>${err.message}</p>
+          </div>`;
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('stat-total').textContent = allRecipes.length;
+
+      const sources = new Set(allRecipes.map(r => r.source).filter(Boolean));
+      document.getElementById('stat-sources').textContent = sources.size;
+
+      const contributors = new Set();
+      allRecipes.forEach(r => (r.sharedBy || []).forEach(s => contributors.add(s.name)));
+      document.getElementById('stat-contributors').textContent = contributors.size;
+
+      const tags = new Set();
+      allRecipes.forEach(r => (r.tags || []).forEach(t => tags.add(t)));
+      document.getElementById('stat-tags').textContent = tags.size;
+    }
+
+    function buildTagFilters() {
+      const tagCounts = {};
+      allRecipes.forEach(r => (r.tags || []).forEach(t => {
+        tagCounts[t] = (tagCounts[t] || 0) + 1;
+      }));
+
+      // Also add source filters
+      const sourceCounts = {};
+      allRecipes.forEach(r => {
+        if (r.source) sourceCounts[r.source] = (sourceCounts[r.source] || 0) + 1;
+      });
+
+      const container = document.getElementById('tag-filters');
+      container.innerHTML = '';
+
+      // Source chips
+      Object.entries(sourceCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .forEach(([source, count]) => {
+          const chip = document.createElement('div');
+          chip.className = 'tag-chip';
+          chip.textContent = `${source} (${count})`;
+          chip.dataset.source = source;
+          chip.addEventListener('click', () => toggleSource(source, chip));
+          container.appendChild(chip);
+        });
+
+      // Tag chips
+      Object.entries(tagCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .forEach(([tag, count]) => {
+          const chip = document.createElement('div');
+          chip.className = 'tag-chip';
+          chip.textContent = `#${tag} (${count})`;
+          chip.dataset.tag = tag;
+          chip.addEventListener('click', () => toggleTag(tag, chip));
+          container.appendChild(chip);
+        });
+    }
+
+    function toggleTag(tag, chip) {
+      if (activeTag === tag) {
+        activeTag = null;
+        chip.classList.remove('active');
+      } else {
+        activeTag = tag;
+        activeSource = null;
+        document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+      }
+      renderRecipes();
+    }
+
+    function toggleSource(source, chip) {
+      if (activeSource === source) {
+        activeSource = null;
+        chip.classList.remove('active');
+      } else {
+        activeSource = source;
+        activeTag = null;
+        document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+      }
+      renderRecipes();
+    }
+
+    function renderRecipes() {
+      const query = document.getElementById('search').value.toLowerCase().trim();
+      let filtered = allRecipes;
+
+      if (query) {
+        filtered = filtered.filter(r =>
+          (r.title || '').toLowerCase().includes(query) ||
+          (r.description || '').toLowerCase().includes(query) ||
+          (r.source || '').toLowerCase().includes(query) ||
+          (r.referCode || '').toLowerCase().includes(query) ||
+          (r.tags || []).some(t => t.includes(query))
+        );
+      }
+
+      if (activeTag) {
+        filtered = filtered.filter(r => (r.tags || []).includes(activeTag));
+      }
+
+      if (activeSource) {
+        filtered = filtered.filter(r => r.source === activeSource);
+      }
+
+      const container = document.getElementById('content');
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <h2>No recipes found</h2>
+            <p>${allRecipes.length === 0 ? 'Use /recipes scrape in Discord to import recipes from #show-and-tell' : 'Try a different search or filter'}</p>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = `<div class="recipe-grid">${filtered.map(recipeCard).join('')}</div>`;
+    }
+
+    function recipeCard(r) {
+      const title = escapeHtml((r.title || 'Untitled Recipe').slice(0, 80));
+      const desc = r.description ? escapeHtml(r.description.slice(0, 150)) : '';
+      const source = r.source ? `<span class="source-badge">${escapeHtml(r.source)}</span>` : '';
+      const shares = r.shareCount > 1 ? `<span class="shares"><strong>${r.shareCount}</strong> shares</span>` : '';
+      const author = (r.sharedBy && r.sharedBy[0]) ? `<span class="author">by ${escapeHtml(r.sharedBy[0].name)}</span>` : '';
+      const code = r.referCode ? `<span class="refer-code"><code>${escapeHtml(r.referCode)}</code></span>` : '';
+      const tags = (r.tags || []).slice(0, 4).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
+      const tagsHtml = tags ? `<div class="tags">${tags}</div>` : '';
+
+      return `
+        <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" class="recipe-card glass">
+          <span class="link-icon">&nearr;</span>
+          <div class="title">${title}</div>
+          ${code ? `<div class="refer-code-line">${code}</div>` : ''}
+          ${desc ? `<div class="description">${desc}</div>` : ''}
+          <div class="meta">
+            ${source}${shares}${author}
+          </div>
+          ${tagsHtml}
+        </a>`;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Search debounce
+    let searchTimeout;
+    document.getElementById('search').addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(renderRecipes, 200);
+    });
+
+    // Init
+    loadRecipes();
+  </script>
+</body>
+</html>

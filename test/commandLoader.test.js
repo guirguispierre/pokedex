@@ -8,18 +8,18 @@ const { loadCommands, toRegistrationBody } = require('../src/commandLoader');
 const EXPECTED_NAMES = [
   'Add to Pokedex context', 'Exclude from Pokedex',
   'addcontext', 'afk', 'automod', 'autoscrape', 'backfill-numbers', 'ban',
-  'changelog', 'color', 'config', 'creator', 'deletethread', 'exclude',
+  'changelog', 'color', 'config', 'deletethread', 'exclude',
   'feedback', 'feedback-triage', 'giveaway', 'help', 'issue', 'kick',
-  'leaderboard', 'level', 'lock', 'lockall', 'merge', 'mute', 'ping', 'pokedex',
-  'pokedexbug', 'poll', 'purge', 'reactionrole', 'recipes', 'rickandmorty',
+  'leaderboard', 'level', 'lock', 'lockall', 'merge', 'mute', 'ping',
+  'pokedexbug', 'poll', 'purge', 'reactionrole', 'recipes',
   'serverinfo', 'slowmode', 'starboard', 'status', 'suggest', 'timeout',
-  'typechart', 'unlock', 'unlockall', 'unmute', 'warn', 'welcome',
+  'unlock', 'unlockall', 'unmute', 'warn', 'welcome',
 ].sort();
 
 // Commands that expose an autocomplete handler — must match the old hardcoded subset.
 const EXPECTED_AUTOCOMPLETE = [
   'automod', 'config', 'feedback-triage', 'giveaway', 'issue', 'merge',
-  'pokedex', 'recipes', 'suggest', 'warn',
+  'recipes', 'suggest', 'warn',
 ].sort();
 
 test('loadCommands loads every command keyed by data.name with an execute()', () => {

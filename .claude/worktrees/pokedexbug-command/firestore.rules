@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /issues/{issueId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /config/{configId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /infractions/{infractionId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /automod/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    // Public read for approved recipes — no auth required
+    match /recipes/{recipeId} {
+      allow read: if resource.data.status == 'approved';
+      allow write: if false;
+    }
+    // Public read for published feedback — no auth required
+    match /feedback/{feedbackId} {
+      allow read: if resource.data.status == 'published';
+      allow write: if false;
+    }
+  }
+}
