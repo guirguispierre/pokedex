@@ -1,20 +1,31 @@
-import { describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { createPoller } from '../../src/services/statusPoller.js';
+const { test, describe } = require('node:test');
+const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const { createPoller } = require('../src/services/statusPoller');
 
 const fixture = (name) =>
-  JSON.parse(readFileSync(join(__dirname, '../fixtures/status/', name), 'utf-8'));
+  JSON.parse(readFileSync(join(__dirname, 'fixtures/status/', name), 'utf-8'));
+
+// Hand-rolled capturing mock: records calls and returns impl's result.
+function fn(impl = () => {}) {
+  const mock = (...args) => {
+    mock.calls.push(args);
+    return impl(...args);
+  };
+  mock.calls = [];
+  return mock;
+}
 
 function makeFakeClient({ fetchChannel, fetchRole } = {}) {
   return {
     channels: {
-      fetch: fetchChannel ?? vi.fn(),
+      fetch: fetchChannel ?? fn(),
     },
     guilds: {
-      fetch: vi.fn(async (id) => ({
+      fetch: fn(async (id) => ({
         id,
-        roles: { fetch: fetchRole ?? vi.fn() },
+        roles: { fetch: fetchRole ?? fn() },
       })),
     },
   };
@@ -29,16 +40,16 @@ function makeFakeChannel(overrides = {}) {
   const ch = {
     id: 'ch1',
     isTextBased: () => true,
-    send: vi.fn(async (payload) => {
+    send: fn(async (payload) => {
       const id = `msg-${++msgCounter}`;
-      const pinFn = vi.fn(async () => {});
+      const pinFn = fn(async () => {});
       const msg = { id, pin: pinFn, payload };
       messageStore.set(id, msg);
       sentMessages.push({ id, payload });
       return msg;
     }),
     messages: {
-      fetch: vi.fn(async (id) => {
+      fetch: fn(async (id) => {
         const m = messageStore.get(id);
         if (!m) {
           const err = new Error('Unknown Message');
@@ -47,7 +58,7 @@ function makeFakeChannel(overrides = {}) {
         }
         return {
           id: m.id,
-          edit: vi.fn(async (p) => { editedMessages.push({ id, payload: p }); }),
+          edit: fn(async (p) => { editedMessages.push({ id, payload: p }); }),
         };
       }),
     },
@@ -84,31 +95,31 @@ function makeFakeStore(initial = {}) {
 }
 
 describe('statusPoller.runTick', () => {
-  it('creates and pins a summary message on first tick with no prior state', async () => {
+  test('creates and pins a summary message on first tick with no prior state', async () => {
     const channel = makeFakeChannel();
-    const client = makeFakeClient({ fetchChannel: vi.fn(async () => channel) });
+    const client = makeFakeClient({ fetchChannel: fn(async () => channel) });
     const store = makeFakeStore({
       g1: { enabled: true, channelId: 'ch1', pinnedMessageId: null },
     });
-    const fetcher = { fetchSummary: vi.fn(async () => fixture('all-operational.json')) };
+    const fetcher = { fetchSummary: fn(async () => fixture('all-operational.json')) };
     const poller = createPoller({
       client, fetcher, store,
       config: { getConfig: () => 'https://status.poke.com' },
-      logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+      logger: { warn: fn(), error: fn(), info: fn() },
     });
 
     await poller.runTick();
 
-    expect(channel.send).toHaveBeenCalledTimes(1);
+    assert.equal(channel.send.calls.length, 1);
     const stored = await store.get('g1');
-    expect(stored.pinnedMessageId).toMatch(/^msg-/);
-    expect(stored.lastSummary).toBeTruthy();
+    assert.match(stored.pinnedMessageId, /^msg-/);
+    assert.ok(stored.lastSummary);
   });
 
-  it('edits the pinned message on subsequent tick and posts transition alerts', async () => {
+  test('edits the pinned message on subsequent tick and posts transition alerts', async () => {
     const channel = makeFakeChannel();
-    channel.messages.fetch = vi.fn(async () => ({ id: 'msg-existing', edit: vi.fn(async () => {}) }));
-    const client = makeFakeClient({ fetchChannel: vi.fn(async () => channel) });
+    channel.messages.fetch = fn(async () => ({ id: 'msg-existing', edit: fn(async () => {}) }));
+    const client = makeFakeClient({ fetchChannel: fn(async () => channel) });
 
     const store = makeFakeStore({
       g1: {
@@ -118,22 +129,22 @@ describe('statusPoller.runTick', () => {
         lastSummary: fixture('all-operational.json'),
       },
     });
-    const fetcher = { fetchSummary: vi.fn(async () => fixture('partial-outage.json')) };
+    const fetcher = { fetchSummary: fn(async () => fixture('partial-outage.json')) };
     const poller = createPoller({
       client, fetcher, store,
       config: { getConfig: () => 'https://status.poke.com' },
-      logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+      logger: { warn: fn(), error: fn(), info: fn() },
     });
 
     await poller.runTick();
 
-    expect(channel.send).toHaveBeenCalledTimes(2);
-    expect(channel.messages.fetch).toHaveBeenCalled();
+    assert.equal(channel.send.calls.length, 2);
+    assert.ok(channel.messages.fetch.calls.length > 0);
   });
 
-  it('posts an incident alert with role ping when alertRoleId is set', async () => {
+  test('posts an incident alert with role ping when alertRoleId is set', async () => {
     const channel = makeFakeChannel();
-    const client = makeFakeClient({ fetchChannel: vi.fn(async () => channel) });
+    const client = makeFakeClient({ fetchChannel: fn(async () => channel) });
     const store = makeFakeStore({
       g1: {
         enabled: true, channelId: 'ch1', pinnedMessageId: 'msg-existing',
@@ -141,31 +152,31 @@ describe('statusPoller.runTick', () => {
         lastSummary: fixture('all-operational.json'),
       },
     });
-    channel.messages.fetch = vi.fn(async () => ({ id: 'msg-existing', edit: vi.fn(async () => {}) }));
+    channel.messages.fetch = fn(async () => ({ id: 'msg-existing', edit: fn(async () => {}) }));
 
-    const fetcher = { fetchSummary: vi.fn(async () => fixture('active-incident.json')) };
+    const fetcher = { fetchSummary: fn(async () => fixture('active-incident.json')) };
     const poller = createPoller({
       client, fetcher, store,
       config: { getConfig: () => 'https://status.poke.com' },
-      logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+      logger: { warn: fn(), error: fn(), info: fn() },
     });
 
     await poller.runTick();
 
-    const roleMention = channel.send.mock.calls.find(c =>
+    const roleMention = channel.send.calls.find(c =>
       typeof c[0]?.content === 'string' && c[0].content.includes('<@&role123>')
     );
-    expect(roleMention).toBeTruthy();
+    assert.ok(roleMention);
   });
 
-  it('clears pinnedMessageId when the pinned message was deleted (10008)', async () => {
+  test('clears pinnedMessageId when the pinned message was deleted (10008)', async () => {
     const channel = makeFakeChannel();
-    channel.messages.fetch = vi.fn(async () => {
+    channel.messages.fetch = fn(async () => {
       const err = new Error('Unknown Message');
       err.code = 10008;
       throw err;
     });
-    const client = makeFakeClient({ fetchChannel: vi.fn(async () => channel) });
+    const client = makeFakeClient({ fetchChannel: fn(async () => channel) });
     const store = makeFakeStore({
       g1: {
         enabled: true, channelId: 'ch1',
@@ -173,22 +184,22 @@ describe('statusPoller.runTick', () => {
         lastSummary: fixture('all-operational.json'),
       },
     });
-    const fetcher = { fetchSummary: vi.fn(async () => fixture('all-operational.json')) };
+    const fetcher = { fetchSummary: fn(async () => fixture('all-operational.json')) };
     const poller = createPoller({
       client, fetcher, store,
       config: { getConfig: () => 'https://status.poke.com' },
-      logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+      logger: { warn: fn(), error: fn(), info: fn() },
     });
 
     await poller.runTick();
 
     const saved = await store.get('g1');
-    expect(saved.pinnedMessageId).toMatch(/^msg-/);
-    expect(saved.pinnedMessageId).not.toBe('msg-gone');
+    assert.match(saved.pinnedMessageId, /^msg-/);
+    assert.notEqual(saved.pinnedMessageId, 'msg-gone');
   });
 
-  it('disables a guild when the channel was deleted (10003)', async () => {
-    const deletedChannelFetch = vi.fn(async () => {
+  test('disables a guild when the channel was deleted (10003)', async () => {
+    const deletedChannelFetch = fn(async () => {
       const err = new Error('Unknown Channel');
       err.code = 10003;
       throw err;
@@ -201,36 +212,36 @@ describe('statusPoller.runTick', () => {
         lastSummary: null,
       },
     });
-    const fetcher = { fetchSummary: vi.fn(async () => fixture('all-operational.json')) };
+    const fetcher = { fetchSummary: fn(async () => fixture('all-operational.json')) };
     const poller = createPoller({
       client, fetcher, store,
       config: { getConfig: () => 'https://status.poke.com' },
-      logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+      logger: { warn: fn(), error: fn(), info: fn() },
     });
 
     await poller.runTick();
 
     const saved = await store.get('g1');
-    expect(saved.enabled).toBe(false);
+    assert.equal(saved.enabled, false);
   });
 
-  it('skips the tick on fetch failure and does not post anything', async () => {
+  test('skips the tick on fetch failure and does not post anything', async () => {
     const channel = makeFakeChannel();
-    const client = makeFakeClient({ fetchChannel: vi.fn(async () => channel) });
+    const client = makeFakeClient({ fetchChannel: fn(async () => channel) });
     const store = makeFakeStore({
       g1: { enabled: true, channelId: 'ch1', pinnedMessageId: 'msg-x', lastSummary: null },
     });
-    const warn = vi.fn();
-    const fetcher = { fetchSummary: vi.fn(async () => { throw new Error('down'); }), getConsecutiveFailures: () => 1 };
+    const warn = fn();
+    const fetcher = { fetchSummary: fn(async () => { throw new Error('down'); }), getConsecutiveFailures: () => 1 };
     const poller = createPoller({
       client, fetcher, store,
       config: { getConfig: () => 'https://status.poke.com' },
-      logger: { warn, error: vi.fn(), info: vi.fn() },
+      logger: { warn, error: fn(), info: fn() },
     });
 
     await poller.runTick();
 
-    expect(channel.send).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalled();
+    assert.equal(channel.send.calls.length, 0);
+    assert.ok(warn.calls.length > 0);
   });
 });

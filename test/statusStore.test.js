@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createStore } from '../../src/services/statusStore.js';
+const { test, describe, beforeEach } = require('node:test');
+const assert = require('node:assert/strict');
+const { createStore } = require('../src/services/statusStore');
 
 function makeFakeDb() {
   const collections = new Map();
@@ -61,50 +62,50 @@ describe('statusStore', () => {
     store = createStore(db);
   });
 
-  it('get returns null when no document exists', async () => {
+  test('get returns null when no document exists', async () => {
     const res = await store.get('guild1');
-    expect(res).toBeNull();
+    assert.equal(res, null);
   });
 
-  it('save creates a document and get returns it', async () => {
+  test('save creates a document and get returns it', async () => {
     await store.save('guild1', { channelId: 'ch1', enabled: true });
     const res = await store.get('guild1');
-    expect(res.channelId).toBe('ch1');
-    expect(res.enabled).toBe(true);
-    expect(res.guildId).toBe('guild1');
-    expect(res.updatedAt).toBeTruthy();
+    assert.equal(res.channelId, 'ch1');
+    assert.equal(res.enabled, true);
+    assert.equal(res.guildId, 'guild1');
+    assert.ok(res.updatedAt);
   });
 
-  it('save merges instead of overwriting', async () => {
+  test('save merges instead of overwriting', async () => {
     await store.save('guild1', { channelId: 'ch1', enabled: true });
     await store.save('guild1', { pinnedMessageId: 'msg1' });
     const res = await store.get('guild1');
-    expect(res.channelId).toBe('ch1');
-    expect(res.pinnedMessageId).toBe('msg1');
-    expect(res.enabled).toBe(true);
+    assert.equal(res.channelId, 'ch1');
+    assert.equal(res.pinnedMessageId, 'msg1');
+    assert.equal(res.enabled, true);
   });
 
-  it('listEnabled returns only enabled guilds', async () => {
+  test('listEnabled returns only enabled guilds', async () => {
     await store.save('g1', { enabled: true });
     await store.save('g2', { enabled: false });
     await store.save('g3', { enabled: true });
     const enabled = await store.listEnabled();
     const ids = enabled.map(r => r.id).sort();
-    expect(ids).toEqual(['g1', 'g3']);
+    assert.deepEqual(ids, ['g1', 'g3']);
   });
 
-  it('disable flips enabled to false and keeps other fields', async () => {
+  test('disable flips enabled to false and keeps other fields', async () => {
     await store.save('g1', { enabled: true, channelId: 'ch1' });
     await store.disable('g1');
     const res = await store.get('g1');
-    expect(res.enabled).toBe(false);
-    expect(res.channelId).toBe('ch1');
+    assert.equal(res.enabled, false);
+    assert.equal(res.channelId, 'ch1');
   });
 
-  it('clearPinnedMessageId nulls the pinnedMessageId field', async () => {
+  test('clearPinnedMessageId nulls the pinnedMessageId field', async () => {
     await store.save('g1', { enabled: true, pinnedMessageId: 'msg1' });
     await store.clearPinnedMessageId('g1');
     const res = await store.get('g1');
-    expect(res.pinnedMessageId).toBeNull();
+    assert.equal(res.pinnedMessageId, null);
   });
 });
