@@ -45,6 +45,16 @@ test('selectScannableAttachments: MIME, min-dimension, and count cap', () => {
   assert.deepEqual(out.map(a => a.url), ['a', 'd']);
 });
 
+test('selectScannableAttachments: accepts a discord.js-style Collection (.values())', () => {
+  // Production passes message.attachments, a Collection (Map-like) — not an array.
+  const coll = new Map([
+    ['1', { contentType: 'image/png', width: 200, height: 200, url: 'a' }],
+    ['2', { contentType: 'text/plain', width: 200, height: 200, url: 'b' }],
+  ]);
+  const out = selectScannableAttachments(coll, { minDimension: 64, maxAttachments: 4 });
+  assert.deepEqual(out.map(a => a.url), ['a']);
+});
+
 test('parseVerdict: clean JSON', () => {
   const v = parseVerdict('{"isScam": true, "confidence": 0.91, "category": "crypto", "reason": "airdrop"}');
   assert.deepEqual(v, { isScam: true, confidence: 0.91, category: 'crypto', reason: 'airdrop', parseFailed: false });
