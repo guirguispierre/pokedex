@@ -2,6 +2,8 @@ node_modules/
 .env
 .mcp.json
 .superpowers/
+.claude/
+.vercel/
 *-service-account*.json
 firebase-debug.log
 firestore-debug.log

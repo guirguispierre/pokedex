@@ -1,8 +1,0 @@
-name = "pokedex-mcp"
-main = "src/index.ts"
-compatibility_date = "2024-12-01"
-compatibility_flags = ["nodejs_compat"]
-
-[[kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "8d6294f515284e689bd166db9a5d8193"
