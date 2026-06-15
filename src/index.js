@@ -42,6 +42,7 @@ const creatorCommand = require('./commands/creator');
 const rickandmortyCommand = require('./commands/rickandmorty');
 const automodCommand = require('./commands/automod');
 const automod = require('./services/automod');
+const scamscan = require('./services/scamscan');
 const feedbackTriageCommand = require('./commands/feedbacktriage');
 const recipesCommand = require('./commands/recipes');
 const autoscrapeCommand = require('./commands/autoscrape');
@@ -153,6 +154,14 @@ client.on('messageCreate', async (message) => {
     if (automodResult) return; // Message was handled by automod (deleted)
   } catch (err) {
     console.error('Error in automod:', err);
+  }
+
+  // Image scam scanner — vision scan of new members' images + repost short-circuit
+  try {
+    const scamResult = await scamscan.handleMessage(message);
+    if (scamResult) return; // image removed
+  } catch (err) {
+    console.error('Error in scam scan:', err);
   }
 
   // AFK system — runs on every non-bot message (welcome back + mention notices)
