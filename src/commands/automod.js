@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
 const automod = require('../services/automod');
+const scamscan = require('../services/scamscan');
 
 const commandData = new SlashCommandBuilder()
   .setName('automod')
@@ -149,7 +150,47 @@ const commandData = new SlashCommandBuilder()
               .addChannelTypes(ChannelType.GuildText)))
       .addSubcommand(sub =>
         sub.setName('list')
-          .setDescription('View all exemptions')));
+          .setDescription('View all exemptions')))
+  // image scam scanner
+  .addSubcommandGroup(group =>
+    group.setName('scamscan')
+      .setDescription('Vision-based image scam scanner')
+      .addSubcommand(sub => sub.setName('enable').setDescription('Enable the image scam scanner'))
+      .addSubcommand(sub => sub.setName('disable').setDescription('Disable the image scam scanner'))
+      .addSubcommand(sub => sub.setName('config').setDescription('View scam-scanner settings'))
+      .addSubcommand(sub =>
+        sub.setName('monitor').setDescription('Add/remove a monitored channel')
+          .addStringOption(opt => opt.setName('action').setDescription('add or remove').setRequired(true)
+            .addChoices({ name: 'add', value: 'add' }, { name: 'remove', value: 'remove' }))
+          .addChannelOption(opt => opt.setName('channel').setDescription('Channel to monitor')
+            .addChannelTypes(ChannelType.GuildText).setRequired(true)))
+      .addSubcommand(sub =>
+        sub.setName('review').setDescription('Set the review/audit channel (every scan logged here)')
+          .addChannelOption(opt => opt.setName('channel').setDescription('Review channel')
+            .addChannelTypes(ChannelType.GuildText).setRequired(true)))
+      .addSubcommand(sub =>
+        sub.setName('admin').setDescription('Set the admin alert channel (confirmed scams)')
+          .addChannelOption(opt => opt.setName('channel').setDescription('Admin channel')
+            .addChannelTypes(ChannelType.GuildText).setRequired(true)))
+      .addSubcommand(sub =>
+        sub.setName('exempt').setDescription('Add/remove an exempt role (skips scanning)')
+          .addStringOption(opt => opt.setName('action').setDescription('add or remove').setRequired(true)
+            .addChoices({ name: 'add', value: 'add' }, { name: 'remove', value: 'remove' }))
+          .addRoleOption(opt => opt.setName('role').setDescription('Role to exempt').setRequired(true)))
+      .addSubcommand(sub =>
+        sub.setName('dm').setDescription('Toggle DMing users when their image is removed')
+          .addBooleanOption(opt => opt.setName('enabled').setDescription('Send DMs?').setRequired(true)))
+      .addSubcommand(sub =>
+        sub.setName('model').setDescription('Set the vision model id')
+          .addStringOption(opt => opt.setName('name').setDescription('OpenRouter vision model id').setRequired(true)))
+      .addSubcommand(sub =>
+        sub.setName('settings').setDescription('Tune thresholds and limits')
+          .addIntegerOption(opt => opt.setName('join_days').setDescription('New-member window (days)').setMinValue(1).setMaxValue(90))
+          .addIntegerOption(opt => opt.setName('mute_days').setDescription('Mute duration (days)').setMinValue(1).setMaxValue(28))
+          .addIntegerOption(opt => opt.setName('threshold').setDescription('Confidence to act, percent').setMinValue(50).setMaxValue(100))
+          .addIntegerOption(opt => opt.setName('hamming').setDescription('Repost match distance (0-64)').setMinValue(0).setMaxValue(64))
+          .addIntegerOption(opt => opt.setName('min_dimension').setDescription('Ignore images smaller than (px)').setMinValue(1).setMaxValue(4096))
+          .addIntegerOption(opt => opt.setName('max_attachments').setDescription('Max images scanned per message').setMinValue(1).setMaxValue(10))));
 
 async function execute(interaction) {
   const group = interaction.options.getSubcommandGroup(false);
@@ -158,6 +199,7 @@ async function execute(interaction) {
   if (group === 'blocklist') return handleBlocklist(interaction, sub);
   if (group === 'links') return handleLinks(interaction, sub);
   if (group === 'exempt') return handleExempt(interaction, sub);
+  if (group === 'scamscan') return handleScamScan(interaction, sub);
 
   if (sub === 'enable') return handleToggle(interaction, true);
   if (sub === 'disable') return handleToggle(interaction, false);
@@ -366,6 +408,101 @@ async function handleExempt(interaction, sub) {
       );
     await interaction.editReply({ embeds: [embed] });
   }
+}
+
+async function handleScamScan(interaction, sub) {
+  await interaction.deferReply({ ephemeral: true });
+  const DAY = 24 * 60 * 60 * 1000;
+
+  if (sub === 'enable' || sub === 'disable') {
+    await scamscan.updateScamScanConfig({ scamScanEnabled: sub === 'enable' });
+    return interaction.editReply(`${sub === 'enable' ? '✅' : '⛔'} Image scam scanner **${sub === 'enable' ? 'enabled' : 'disabled'}**.`);
+  }
+
+  if (sub === 'monitor') {
+    const action = interaction.options.getString('action');
+    const channel = interaction.options.getChannel('channel');
+    if (action === 'add') await scamscan.addConfigArrayItem('monitorChannelIds', channel.id);
+    else await scamscan.removeConfigArrayItem('monitorChannelIds', channel.id);
+    return interaction.editReply(`✅ ${action === 'add' ? 'Now monitoring' : 'Stopped monitoring'} ${channel}.`);
+  }
+
+  if (sub === 'review') {
+    const channel = interaction.options.getChannel('channel');
+    await scamscan.updateScamScanConfig({ reviewChannelId: channel.id });
+    return interaction.editReply(`📋 Scan reviews will be logged to ${channel}.`);
+  }
+
+  if (sub === 'admin') {
+    const channel = interaction.options.getChannel('channel');
+    await scamscan.updateScamScanConfig({ adminChannelId: channel.id });
+    return interaction.editReply(`🚨 Scam alerts will be sent to ${channel}.`);
+  }
+
+  if (sub === 'exempt') {
+    const action = interaction.options.getString('action');
+    const role = interaction.options.getRole('role');
+    if (action === 'add') await scamscan.addConfigArrayItem('exemptRoleIds', role.id);
+    else await scamscan.removeConfigArrayItem('exemptRoleIds', role.id);
+    return interaction.editReply(`✅ ${action === 'add' ? 'Exempted' : 'Un-exempted'} ${role} from scam scanning.`);
+  }
+
+  if (sub === 'dm') {
+    const enabled = interaction.options.getBoolean('enabled');
+    await scamscan.updateScamScanConfig({ dmOnAction: enabled });
+    return interaction.editReply(`${enabled ? '✅' : '⛔'} User DMs on removal **${enabled ? 'enabled' : 'disabled'}**.`);
+  }
+
+  if (sub === 'model') {
+    const name = interaction.options.getString('name').trim();
+    await scamscan.updateScamScanConfig({ visionModel: name });
+    return interaction.editReply(`✅ Vision model set to \`${name}\`.`);
+  }
+
+  if (sub === 'settings') {
+    const updates = {};
+    const joinDays = interaction.options.getInteger('join_days');
+    const muteDays = interaction.options.getInteger('mute_days');
+    const threshold = interaction.options.getInteger('threshold');
+    const hamming = interaction.options.getInteger('hamming');
+    const minDim = interaction.options.getInteger('min_dimension');
+    const maxAtt = interaction.options.getInteger('max_attachments');
+    if (joinDays !== null) updates.joinWindowMs = joinDays * DAY;
+    if (muteDays !== null) updates.muteMs = muteDays * DAY;
+    if (threshold !== null) updates.threshold = threshold / 100;
+    if (hamming !== null) updates.hammingThreshold = hamming;
+    if (minDim !== null) updates.minDimension = minDim;
+    if (maxAtt !== null) updates.maxAttachments = maxAtt;
+    if (Object.keys(updates).length === 0) return interaction.editReply('No settings specified.');
+    await scamscan.updateScamScanConfig(updates);
+    const lines = Object.entries(updates).map(([k, v]) => `**${k}**: ${v}`);
+    return interaction.editReply(`✅ Updated:\n${lines.join('\n')}`);
+  }
+
+  // sub === 'config'
+  const cfg = await scamscan.getScamScanConfig();
+  const embed = new EmbedBuilder()
+    .setTitle('🔍 Image Scam Scanner')
+    .setColor(cfg.scamScanEnabled ? 0x2ecc71 : 0xe74c3c)
+    .addFields(
+      { name: 'Status', value: cfg.scamScanEnabled ? '✅ Enabled' : '⛔ Disabled', inline: true },
+      { name: 'Vision model', value: `\`${cfg.visionModel}\``, inline: true },
+      { name: 'DM on action', value: cfg.dmOnAction ? 'Yes' : 'No', inline: true },
+      { name: 'Monitored', value: cfg.monitorChannelIds.length ? cfg.monitorChannelIds.map(c => `<#${c}>`).join(', ') : 'None (off)' },
+      { name: 'Review channel', value: cfg.reviewChannelId ? `<#${cfg.reviewChannelId}>` : 'Not set', inline: true },
+      { name: 'Admin channel', value: cfg.adminChannelId ? `<#${cfg.adminChannelId}>` : 'Not set', inline: true },
+      { name: 'Exempt roles', value: cfg.exemptRoleIds.length ? cfg.exemptRoleIds.map(r => `<@&${r}>`).join(', ') : 'None' },
+      { name: 'Tuning', value: [
+        `New-member window: ${Math.round(cfg.joinWindowMs / DAY)}d`,
+        `Mute: ${Math.round(cfg.muteMs / DAY)}d`,
+        `Act at: ${Math.round(cfg.threshold * 100)}% confidence`,
+        `Repost match: ≤${cfg.hammingThreshold} bits`,
+        `Min image: ${cfg.minDimension}px`,
+        `Max/msg: ${cfg.maxAttachments}`,
+      ].join('\n') },
+    )
+    .setTimestamp();
+  return interaction.editReply({ embeds: [embed] });
 }
 
 function normalizeDomain(input) {
