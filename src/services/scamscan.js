@@ -30,6 +30,46 @@ const DEFAULT_CONFIG = {
   dmOnAction: false,                 // gated DM, like automod's dmOnAction
 };
 
+let cachedConfig = null;
+let configLoadedAt = 0;
+const CONFIG_TTL = 30000; // 30s cache, matching automod
+
+async function getScamScanConfig() {
+  if (cachedConfig && Date.now() - configLoadedAt < CONFIG_TTL) {
+    return cachedConfig;
+  }
+  try {
+    const doc = await CONFIG_DOC().get();
+    cachedConfig = doc.exists ? { ...DEFAULT_CONFIG, ...doc.data() } : { ...DEFAULT_CONFIG };
+  } catch {
+    cachedConfig = { ...DEFAULT_CONFIG };
+  }
+  configLoadedAt = Date.now();
+  return cachedConfig;
+}
+
+async function updateScamScanConfig(updates) {
+  await CONFIG_DOC().set(updates, { merge: true });
+  cachedConfig = null; // bust cache
+}
+
+// arrayUnion/arrayRemove for monitorChannelIds and exemptRoleIds.
+async function addConfigArrayItem(field, id) {
+  await CONFIG_DOC().set(
+    { [field]: admin.firestore.FieldValue.arrayUnion(id) },
+    { merge: true },
+  );
+  cachedConfig = null;
+}
+
+async function removeConfigArrayItem(field, id) {
+  await CONFIG_DOC().set(
+    { [field]: admin.firestore.FieldValue.arrayRemove(id) },
+    { merge: true },
+  );
+  cachedConfig = null;
+}
+
 // --- Pure planners (unit-tested) ---
 
 function isNewMember(member, now, windowMs) {
@@ -100,6 +140,10 @@ function planAction(verdict, { threshold }, opts = {}) {
 
 module.exports = {
   DEFAULT_CONFIG,
+  getScamScanConfig,
+  updateScamScanConfig,
+  addConfigArrayItem,
+  removeConfigArrayItem,
   isNewMember,
   isExemptRole,
   selectScannableAttachments,
