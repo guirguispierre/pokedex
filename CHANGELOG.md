@@ -4,6 +4,7 @@
 
 ### Removed
 - **Fun commands** — `/pokedex`, `/typechart`, `/rickandmorty`, and `/creator` have been removed. They were novelty/off-topic for a bug-triage bot and are no longer registered.
+- **`/timeout`** — removed as redundant with `/mute` and `/unmute` (v2.12.0), which are friendlier wrappers over the same Discord timeout. Use `/mute <user> <duration>` instead.
 
 ## [2.12.0] - 2026-06-04
 

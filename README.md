@@ -19,7 +19,7 @@ Built with discord.js 14, Express 5, Firebase/Firestore, and [OpenRouter](https:
 
 ### Moderation
 - **AutoMod** — Spam (rate/duplicate/mention), raid (join velocity), and content filters (caps, invites, blocklist) with escalating timeouts
-- **Manual tools** — `/ban`, `/kick`, `/timeout`, `/warn`, `/purge`, `/lock`, `/unlock`, `/slowmode`, `/deletethread`
+- **Manual tools** — `/ban`, `/kick`, `/mute`, `/unmute`, `/warn`, `/purge`, `/lock`, `/unlock`, `/slowmode`, `/deletethread`
 - **Infraction log** — Warnings persisted per user with reason and moderator
 
 ### Community & engagement
@@ -110,7 +110,7 @@ Use `/help` in Discord for the live, grouped list. A summary:
 | Category | Commands |
 |----------|----------|
 | Issues | `/issue`, `/merge`, `/pokedexbug`, `/feedback`, `/feedbacktriage`, `/leaderboard` |
-| Moderation | `/automod`, `/ban`, `/kick`, `/timeout`, `/warn`, `/purge`, `/lock`, `/unlock`, `/slowmode`, `/deletethread` |
+| Moderation | `/automod`, `/ban`, `/kick`, `/mute`, `/unmute`, `/warn`, `/purge`, `/lock`, `/unlock`, `/slowmode`, `/deletethread` |
 | Community | `/level`, `/afk`, `/giveaway`, `/poll`, `/reactionrole`, `/starboard`, `/suggest` |
 | Content | `/recipes` |
 | Admin | `/config`, `/autoscrape` |

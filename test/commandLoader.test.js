@@ -12,7 +12,7 @@ const EXPECTED_NAMES = [
   'feedback', 'feedback-triage', 'giveaway', 'help', 'issue', 'kick',
   'leaderboard', 'level', 'lock', 'lockall', 'merge', 'mute', 'ping',
   'pokedexbug', 'poll', 'purge', 'reactionrole', 'recipes',
-  'serverinfo', 'slowmode', 'starboard', 'status', 'suggest', 'timeout',
+  'serverinfo', 'slowmode', 'starboard', 'status', 'suggest',
   'unlock', 'unlockall', 'unmute', 'warn', 'welcome',
 ].sort();
 
