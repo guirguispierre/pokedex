@@ -1,16 +1,17 @@
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { initializeApp, cert } = require('firebase-admin/app');
 
 let db;
 
 function init() {
-  admin.initializeApp({
-    credential: admin.credential.cert({
+  initializeApp({
+    credential: cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
     }),
   });
-  db = admin.firestore();
+  db = getFirestore();
 }
 
 async function isDuplicate(messageId) {
@@ -38,7 +39,7 @@ async function saveIssue(issueData) {
     ...issueData,
     number,
     status: 'open',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
   return docRef.id;
 }
@@ -66,7 +67,7 @@ async function setConfigOverride(key, value, userId) {
     key,
     value,
     updatedBy: userId,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
 }
 
@@ -112,7 +113,7 @@ async function updateIssueClassification(issueId, classification) {
     category: classification.category,
     summary: classification.summary,
     reasoning: classification.reasoning,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
 }
 
@@ -125,11 +126,11 @@ async function getIssueById(issueId) {
 async function updateIssueStatus(issueId, status, closedBy) {
   const update = {
     status,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   };
   if (status === 'closed') {
     update.closedBy = closedBy;
-    update.closedAt = admin.firestore.FieldValue.serverTimestamp();
+    update.closedAt = FieldValue.serverTimestamp();
   }
   await db.collection('issues').doc(issueId).update(update);
 }
@@ -219,8 +220,8 @@ async function assignIssue(issueId, assignment) {
     assigneeId: assignment.assigneeId,
     assigneeName: assignment.assigneeName,
     assignedBy: assignment.assignedBy,
-    assignedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    assignedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
 }
 
@@ -242,7 +243,7 @@ async function addIssueNote(issueId, note) {
 
   await docRef.update({
     notes,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
 
   return storedNote;
@@ -303,7 +304,7 @@ async function getAllIssuesWithThreadId() {
 
 async function saveRecipe(recipeData) {
   const crypto = require('crypto');
-  const db = admin.firestore();
+  const db = getFirestore();
   // Use a deterministic doc ID based on normalized URL to prevent race conditions
   const normalizedUrl = recipeData.url.trim().toLowerCase().replace(/\/+$/, '');
   const docId = crypto.createHash('sha256').update(normalizedUrl).digest('hex');
@@ -323,9 +324,9 @@ async function saveRecipe(recipeData) {
     );
     if (newSharers.length > 0) {
       await legacyDoc.ref.update({
-        sharedBy: admin.firestore.FieldValue.arrayUnion(...newSharers),
-        shareCount: admin.firestore.FieldValue.increment(newSharers.length),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        sharedBy: FieldValue.arrayUnion(...newSharers),
+        shareCount: FieldValue.increment(newSharers.length),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     }
     return { id: legacyDoc.id, updated: true };
@@ -338,8 +339,8 @@ async function saveRecipe(recipeData) {
     await docRef.create({
       ...recipeData,
       shareCount: initialShareCount,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
     return { id: docId, updated: false };
   } catch (err) {
@@ -352,10 +353,10 @@ async function saveRecipe(recipeData) {
         const data = doc.data();
         const existingSharerIds = (data.sharedBy || []).map(s => s.id);
         const newSharers = (recipeData.sharedBy || []).filter(s => !existingSharerIds.includes(s.id));
-        const updates = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+        const updates = { updatedAt: FieldValue.serverTimestamp() };
         if (newSharers.length > 0) {
-          updates.sharedBy = admin.firestore.FieldValue.arrayUnion(...newSharers);
-          updates.shareCount = admin.firestore.FieldValue.increment(newSharers.length);
+          updates.sharedBy = FieldValue.arrayUnion(...newSharers);
+          updates.shareCount = FieldValue.increment(newSharers.length);
         }
         txn.update(docRef, updates);
       });
@@ -366,7 +367,7 @@ async function saveRecipe(recipeData) {
 }
 
 async function getAllRecipes(limit = 200) {
-  const db = admin.firestore();
+  const db = getFirestore();
   const snapshot = await db.collection('recipes')
     .orderBy('shareCount', 'desc')
     .limit(Math.min(limit, 500))
@@ -384,13 +385,13 @@ async function getAllRecipes(limit = 200) {
  * avoid memory pressure.
  */
 async function getAllRecipesUncapped() {
-  const db = admin.firestore();
+  const db = getFirestore();
   const snap = await db.collection('recipes').get();
   return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 async function getApprovedRecipes(limit = 200) {
-  const db = admin.firestore();
+  const db = getFirestore();
   const snapshot = await db.collection('recipes')
     .where('status', '==', 'approved')
     .orderBy('shareCount', 'desc')
@@ -400,7 +401,7 @@ async function getApprovedRecipes(limit = 200) {
 }
 
 async function getPendingRecipes(limit = 50) {
-  const db = admin.firestore();
+  const db = getFirestore();
   const snapshot = await db.collection('recipes')
     .where('status', '==', 'pending')
     .orderBy('createdAt', 'desc')
@@ -410,14 +411,14 @@ async function getPendingRecipes(limit = 50) {
 }
 
 async function getRecipeById(recipeId) {
-  const db = admin.firestore();
+  const db = getFirestore();
   const doc = await db.collection('recipes').doc(recipeId).get();
   if (!doc.exists) return null;
   return { id: doc.id, ...doc.data() };
 }
 
 async function getRecipeByUrl(url) {
-  const db = admin.firestore();
+  const db = getFirestore();
   const snapshot = await db.collection('recipes')
     .where('url', '==', url)
     .limit(1)
@@ -427,18 +428,18 @@ async function getRecipeByUrl(url) {
 }
 
 async function updateRecipeStatus(recipeId, status, reviewerId, reviewerName) {
-  const db = admin.firestore();
+  const db = getFirestore();
   await db.collection('recipes').doc(recipeId).update({
     status,
     reviewedBy: reviewerName,
     reviewedById: reviewerId,
-    reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    reviewedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
 }
 
 async function deleteRecipe(recipeId) {
-  const db = admin.firestore();
+  const db = getFirestore();
   await db.collection('recipes').doc(recipeId).delete();
 }
 
@@ -484,7 +485,7 @@ async function createGap(data) {
   if (!data?.normalizedKey) throw new Error('createGap: normalizedKey is required');
   await db.collection('capability_gaps').doc(data.normalizedKey).set({
     ...data,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
   return data.normalizedKey;
 }
@@ -540,7 +541,7 @@ async function appendAdditionalContext(issueId, entry) {
   };
   const docRef = db.collection('issues').doc(issueId);
   await docRef.update({
-    additionalContext: admin.firestore.FieldValue.arrayUnion(stored),
+    additionalContext: FieldValue.arrayUnion(stored),
   }).catch(err => {
     // update() rejects with NOT_FOUND (code 5) if the doc doesn't exist —
     // surface null rather than throwing so the caller can show "not found".
@@ -556,15 +557,15 @@ async function appendAdditionalContext(issueId, entry) {
 
 async function addExcludedMessageIds(issueId, ids) {
   await db.collection('issues').doc(issueId).update({
-    excludedMessageIds: admin.firestore.FieldValue.arrayUnion(...ids),
+    excludedMessageIds: FieldValue.arrayUnion(...ids),
   });
 }
 
 async function setExcludeMode(issueId, userId, on) {
   await db.collection('issues').doc(issueId).update({
     excludeModeUserIds: on
-      ? admin.firestore.FieldValue.arrayUnion(userId)
-      : admin.firestore.FieldValue.arrayRemove(userId),
+      ? FieldValue.arrayUnion(userId)
+      : FieldValue.arrayRemove(userId),
   });
 }
 
@@ -576,7 +577,7 @@ async function clearExclusions(issueId) {
 
 async function incrementQuestionTurns(issueId) {
   await db.collection('issues').doc(issueId).update({
-    questionTurns: admin.firestore.FieldValue.increment(1),
+    questionTurns: FieldValue.increment(1),
   });
 }
 
@@ -597,7 +598,7 @@ async function saveFeedback(feedbackData) {
   const ref = await db.collection('feedback').add({
     ...feedbackData,
     status: 'published',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
   return { id: ref.id, duplicate: false };
 }

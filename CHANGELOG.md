@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-06-21
+
+### Changed
+- **Upgraded `firebase-admin` 13 → 14** and migrated the entire data layer from the removed namespaced API to the v14 modular API (`getFirestore()`, `FieldValue`, `Timestamp` from `firebase-admin/firestore`; `initializeApp`/`cert` from `firebase-admin/app`) across 25 files. No behavior change — same Firestore reads/writes, transactions, and field sentinels.
+- **Minimum Node.js is now 22** (required by firebase-admin 14; added an `engines` field). CI already runs Node 22 and 24.
+
+### Security
+- The firebase-admin 14 upgrade plus targeted `overrides` (`uuid`, `gaxios`, `retry-request`, `teeny-request`) clear the remaining moderate advisories in the google-cloud dependency tree. **`npm audit`: 0 vulnerabilities** (was 8 moderate).
+
 ## [2.14.2] - 2026-06-21
 
 ### Security

@@ -1,5 +1,5 @@
 const { ChannelType, EmbedBuilder } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore } = require('firebase-admin/firestore');
 const { getConfig, getOwnerId } = require('../config/config');
 const { classifyIssue } = require('../services/openrouter');
 const agentTriage = require('../services/agentTriage');
@@ -142,7 +142,7 @@ async function handleForumPost(thread) {
       await firestore.updateIssueThreadId(existing.id, thread.id);
 
       // Delete the placeholder issue we created
-      const db = admin.firestore();
+      const db = getFirestore();
       await db.collection('issues').doc(issueId).delete();
 
       // Refresh the triage embed on the existing issue

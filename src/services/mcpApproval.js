@@ -1,4 +1,4 @@
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const {
   EmbedBuilder,
   ActionRowBuilder,
@@ -18,7 +18,7 @@ const DECLINE_EMOJI = '❌';
 const ISSUE_ID_PATTERN = /Issue ID:\s*([A-Za-z0-9_-]+)/i;
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 function extractIssueId(text) {
@@ -144,7 +144,7 @@ async function decidePendingIssue(issueId, decision, user) {
     return { ok: false, error: `Issue is already ${issue.status || 'processed'}.` };
   }
 
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const timestamp = FieldValue.serverTimestamp();
   const update = decision === 'approve'
     ? {
         status: 'open',

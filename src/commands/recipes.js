@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const firestore = require('../services/firestore');
 const { getConfig } = require('../config/config');
 const { extractTags, inferSource } = require('../recipes/extractors');
@@ -779,7 +779,7 @@ async function executeRetag(interaction) {
   }
 
   // Write phase: batch commits of 500
-  const db = admin.firestore();
+  const db = getFirestore();
   const BATCH_SIZE = 500;
   let succeeded = 0;
   let failed = 0;
@@ -792,7 +792,7 @@ async function executeRetag(interaction) {
       batch.update(ref, {
         tags: change.newTags,
         source: change.newSource,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     }
     try {

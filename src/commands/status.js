@@ -5,7 +5,7 @@ const { createPoller } = require('../services/statusPoller');
 const { buildSummaryEmbed, buildIncidentListEmbeds } = require('../services/statusFormatter');
 const { normalize } = require('../services/statusDiff');
 const config = require('../config/config');
-const admin = require('firebase-admin');
+const { getFirestore } = require('firebase-admin/firestore');
 
 const commandData = new SlashCommandBuilder()
   .setName('status')
@@ -55,7 +55,7 @@ async function execute(interaction) {
 }
 
 function getDeps() {
-  const db = admin.firestore();
+  const db = getFirestore();
   const store = createStore(db);
   const fetcher = createFetcher({ timeoutMs: config.getConfig('status_fetch_timeout_ms') || 10000 });
   return { store, fetcher };

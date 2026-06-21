@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 const commandData = new SlashCommandBuilder()
@@ -63,7 +63,7 @@ async function execute(interaction) {
     deleteDays,
     moderatorId: interaction.user.id,
     moderatorName: interaction.user.username,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
 
   const embed = new EmbedBuilder()

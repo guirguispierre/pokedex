@@ -18,8 +18,8 @@ async function checkPendingIssues(guild) {
   if (!triageChannel) return;
 
   try {
-    const admin = require('firebase-admin');
-    const db = admin.firestore();
+    const { getFirestore } = require('firebase-admin/firestore');
+    const db = getFirestore();
     const snapshot = await db.collection('issues')
       .where('status', '==', 'pending')
       .where('source', '==', 'mcp')

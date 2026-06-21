@@ -1,9 +1,9 @@
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const phash = require('./phash');
 const { callWithTools } = require('./openrouter');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 // Single-guild bot (DISCORD_GUILD_ID is required), so the scam-scan config doc
@@ -56,7 +56,7 @@ async function updateScamScanConfig(updates) {
 // arrayUnion/arrayRemove for monitorChannelIds and exemptRoleIds.
 async function addConfigArrayItem(field, id) {
   await CONFIG_DOC().set(
-    { [field]: admin.firestore.FieldValue.arrayUnion(id) },
+    { [field]: FieldValue.arrayUnion(id) },
     { merge: true },
   );
   cachedConfig = null;
@@ -64,7 +64,7 @@ async function addConfigArrayItem(field, id) {
 
 async function removeConfigArrayItem(field, id) {
   await CONFIG_DOC().set(
-    { [field]: admin.firestore.FieldValue.arrayRemove(id) },
+    { [field]: FieldValue.arrayRemove(id) },
     { merge: true },
   );
   cachedConfig = null;
@@ -92,13 +92,13 @@ async function recordScamHash({ hash, category, reason, confidence, channelId, u
     seenChannels: channelId ? [channelId] : [],
     firstUserId: userId || null,
     expiresAt,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
 }
 
 async function addHashSeenChannel(docId, channelId) {
   await HASHES().doc(docId).set(
-    { seenChannels: admin.firestore.FieldValue.arrayUnion(channelId) },
+    { seenChannels: FieldValue.arrayUnion(channelId) },
     { merge: true },
   );
 }

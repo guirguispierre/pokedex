@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 const commandData = new SlashCommandBuilder()
@@ -53,7 +53,7 @@ async function handleChannel(interaction) {
   const db = getDb();
   await db.collection('welcome_config').doc(interaction.guild.id).set({
     channelId: channel.id,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   await interaction.editReply(`Welcome/goodbye messages will be sent to ${channel}.`);
@@ -65,7 +65,7 @@ async function handleMessage(interaction) {
   const db = getDb();
   await db.collection('welcome_config').doc(interaction.guild.id).set({
     welcomeMessage: text,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   await interaction.editReply(`Welcome message set to: ${text}`);
@@ -77,7 +77,7 @@ async function handleGoodbye(interaction) {
   const db = getDb();
   await db.collection('welcome_config').doc(interaction.guild.id).set({
     goodbyeMessage: text,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   await interaction.editReply(`Goodbye message set to: ${text}`);
@@ -88,7 +88,7 @@ async function handleToggle(interaction) {
   const type = interaction.options.getString('type');
   const enabled = interaction.options.getBoolean('enabled');
   const db = getDb();
-  const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+  const update = { updatedAt: FieldValue.serverTimestamp() };
 
   if (type === 'welcome' || type === 'both') update.welcomeEnabled = enabled;
   if (type === 'goodbye' || type === 'both') update.goodbyeEnabled = enabled;

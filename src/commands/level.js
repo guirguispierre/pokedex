@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getConfig } = require('../config/config');
 
 // XP cooldown — 1 minute between XP gains per user
@@ -8,7 +8,7 @@ const XP_PER_MESSAGE = { min: 15, max: 25 };
 const cooldowns = new Map();
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 function xpForLevel(level) {
@@ -181,7 +181,7 @@ async function awardXP(message) {
     xp: newXP,
     messages: messages + 1,
     username: message.author.username,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   // Announce level up (respects level_announce config)

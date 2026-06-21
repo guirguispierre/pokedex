@@ -1,7 +1,7 @@
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 // In-memory tracking for rate-based detection
@@ -83,7 +83,7 @@ async function getBlocklist() {
 
 async function addBlocklistWord(word) {
   await getDb().collection('automod').doc('blocklist').set(
-    { words: admin.firestore.FieldValue.arrayUnion(word.toLowerCase()) },
+    { words: FieldValue.arrayUnion(word.toLowerCase()) },
     { merge: true },
   );
   cachedBlocklist = null; // bust cache
@@ -91,7 +91,7 @@ async function addBlocklistWord(word) {
 
 async function removeBlocklistWord(word) {
   await getDb().collection('automod').doc('blocklist').set(
-    { words: admin.firestore.FieldValue.arrayRemove(word.toLowerCase()) },
+    { words: FieldValue.arrayRemove(word.toLowerCase()) },
     { merge: true },
   );
   cachedBlocklist = null; // bust cache
@@ -116,7 +116,7 @@ async function getLinkConfig() {
 async function addLinkEntry(type, domain) {
   const field = type === 'allow' ? 'allowed' : 'blocked';
   await getDb().collection('automod').doc('links').set(
-    { [field]: admin.firestore.FieldValue.arrayUnion(domain.toLowerCase()) },
+    { [field]: FieldValue.arrayUnion(domain.toLowerCase()) },
     { merge: true },
   );
   cachedLinkConfig = null; // bust cache
@@ -125,7 +125,7 @@ async function addLinkEntry(type, domain) {
 async function removeLinkEntry(type, domain) {
   const field = type === 'allow' ? 'allowed' : 'blocked';
   await getDb().collection('automod').doc('links').set(
-    { [field]: admin.firestore.FieldValue.arrayRemove(domain.toLowerCase()) },
+    { [field]: FieldValue.arrayRemove(domain.toLowerCase()) },
     { merge: true },
   );
   cachedLinkConfig = null; // bust cache
@@ -150,7 +150,7 @@ async function getExemptions() {
 async function addExemption(type, id) {
   const field = type === 'role' ? 'roles' : 'channels';
   await getDb().collection('automod').doc('exemptions').set(
-    { [field]: admin.firestore.FieldValue.arrayUnion(id) },
+    { [field]: FieldValue.arrayUnion(id) },
     { merge: true },
   );
   cachedExemptions = null; // bust cache
@@ -159,7 +159,7 @@ async function addExemption(type, id) {
 async function removeExemption(type, id) {
   const field = type === 'role' ? 'roles' : 'channels';
   await getDb().collection('automod').doc('exemptions').set(
-    { [field]: admin.firestore.FieldValue.arrayRemove(id) },
+    { [field]: FieldValue.arrayRemove(id) },
     { merge: true },
   );
   cachedExemptions = null; // bust cache
@@ -186,7 +186,7 @@ async function recordOffense(userId, username, guildId, reason, action) {
     action,
     moderatorId: 'automod',
     moderatorName: 'AutoMod',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
 }
 

@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 module.exports = {
@@ -117,7 +117,7 @@ async function handleSetup(interaction) {
       channelId: interaction.channelId,
       guildId: interaction.guildId,
       roles: roleMap,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       createdBy: interaction.user.id,
     });
 

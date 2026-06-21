@@ -87,8 +87,8 @@ client.once('clientReady', async () => {
 
   if (config.getConfig('status_enabled')) {
     try {
-      const admin = require('firebase-admin');
-      const statusStore = createStatusStore(admin.firestore());
+      const { getFirestore } = require('firebase-admin/firestore');
+      const statusStore = createStatusStore(getFirestore());
       const statusFetcher = createFetcher({
         timeoutMs: config.getConfig('status_fetch_timeout_ms') || 10000,
       });
@@ -326,8 +326,8 @@ async function handleButtonInteraction(interaction) {
     // Handle delete — soft-delete so the issue can still be reopened
     if (action === 'delete') {
       try {
-        const admin = require('firebase-admin');
-        const db = admin.firestore();
+        const { getFirestore } = require('firebase-admin/firestore');
+        const db = getFirestore();
         await db.collection('issues').doc(issueId).update({
           status: 'deleted',
           deletedAt: new Date().toISOString(),

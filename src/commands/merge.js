@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 const commandData = new SlashCommandBuilder()
@@ -110,8 +110,8 @@ async function execute(interaction) {
 
   const updateData = {
     threadContext: existingContext,
-    mergeHistory: admin.firestore.FieldValue.arrayUnion(mergeRecord),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    mergeHistory: FieldValue.arrayUnion(mergeRecord),
+    updatedAt: FieldValue.serverTimestamp(),
   };
 
   // Merge unique attachments
@@ -127,8 +127,8 @@ async function execute(interaction) {
       status: 'merged',
       mergedInto: targetId,
       closedBy: interaction.user.id,
-      closedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      closedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
   }
 

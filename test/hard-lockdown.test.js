@@ -108,18 +108,20 @@ function makeFakeAdmin(opts = {}) {
     serverTimestamp: () => SERVER_TS,
   };
 
-  return { firestore, _store: store };
+  // Shaped like the `firebase-admin/firestore` module (v14 modular API): the
+  // service does `const { getFirestore, FieldValue } = require('firebase-admin/firestore')`.
+  return { getFirestore: firestore, FieldValue: firestore.FieldValue, _store: store };
 }
 
 // Install a fake admin into the module cache and return a freshly-required
 // lockdown module bound to it. Each call gets an isolated store.
 function loadLockdownWith(adminMock) {
-  const adminPath = require.resolve('firebase-admin');
+  const fsPath = require.resolve('firebase-admin/firestore');
   const ldPath = require.resolve('../src/services/lockdown');
-  const prevAdmin = require.cache[adminPath];
-  require.cache[adminPath] = {
-    id: adminPath,
-    filename: adminPath,
+  const prevFs = require.cache[fsPath];
+  require.cache[fsPath] = {
+    id: fsPath,
+    filename: fsPath,
     loaded: true,
     exports: adminMock,
   };
@@ -127,8 +129,8 @@ function loadLockdownWith(adminMock) {
   const ld = require('../src/services/lockdown');
   // Restore the cache so other test files get the real module; the already-loaded
   // `ld` keeps its captured reference to our mock.
-  if (prevAdmin) require.cache[adminPath] = prevAdmin;
-  else delete require.cache[adminPath];
+  if (prevFs) require.cache[fsPath] = prevFs;
+  else delete require.cache[fsPath];
   delete require.cache[ldPath];
   return ld;
 }

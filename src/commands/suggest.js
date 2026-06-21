@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 const statusColors = {
@@ -138,7 +138,7 @@ async function handleIdea(interaction) {
       authorName: userName,
       idea,
       status: 'pending',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     await message.react('👍');
@@ -220,7 +220,7 @@ async function handleStatus(interaction) {
 
     await docRef.update({
       status: newStatus,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     return interaction.editReply({
@@ -251,7 +251,7 @@ async function handleChannel(interaction) {
     const db = getDb();
     await db.collection('suggest_config').doc(guildId).set({
       channelId: channel.id,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     return interaction.editReply({

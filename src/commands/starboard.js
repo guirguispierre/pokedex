@@ -1,9 +1,9 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getConfig } = require('../config/config');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 const commandData = new SlashCommandBuilder()
@@ -37,7 +37,7 @@ async function handleSetup(interaction) {
     channelId: channel.id,
     guildId: interaction.guild.id,
     updatedBy: interaction.user.id,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   const embed = new EmbedBuilder()
@@ -55,7 +55,7 @@ async function handleThreshold(interaction) {
   await db.collection('starboard_config').doc(interaction.guild.id).set({
     threshold: count,
     updatedBy: interaction.user.id,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 
   const embed = new EmbedBuilder()
@@ -160,7 +160,7 @@ async function handleStarReaction(reaction, user) {
         authorId: message.author.id,
         starboardMessageId: starMsg.id,
         starCount: count,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
     }
   } catch (err) {

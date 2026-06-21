@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const firestore = require('../services/firestore');
 const { classifyIssue } = require('../services/openrouter');
 const { findDuplicate, findDuplicateAI, findDuplicateClustersAI } = require('../services/duplicates');
@@ -146,7 +146,7 @@ async function executeMerge(interaction) {
   await interaction.deferReply();
 
   const targetId = interaction.options.getString('target').trim();
-  const db = admin.firestore();
+  const db = getFirestore();
 
   // Validate target issue exists
   const targetDoc = await db.collection('issues').doc(targetId).get();
@@ -202,8 +202,8 @@ async function executeMerge(interaction) {
   }
 
   const updateData = {
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    mergeHistory: admin.firestore.FieldValue.arrayUnion({
+    updatedAt: FieldValue.serverTimestamp(),
+    mergeHistory: FieldValue.arrayUnion({
       mergedAt: new Date().toISOString(),
       mergedBy: interaction.user.username,
       mergedByUserId: interaction.user.id,
@@ -231,8 +231,8 @@ async function executeMerge(interaction) {
       status: 'merged',
       mergedInto: targetId,
       closedBy: interaction.user.id,
-      closedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      closedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
   }
 
@@ -669,8 +669,8 @@ async function executeReorganize(interaction) {
 
       // Record merge history
       await firestore.updateIssueFields(canonical.id, {
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        mergeHistory: admin.firestore.FieldValue.arrayUnion({
+        updatedAt: FieldValue.serverTimestamp(),
+        mergeHistory: FieldValue.arrayUnion({
           mergedAt: new Date().toISOString(),
           mergedBy: interaction.user.username,
           mergedByUserId: interaction.user.id,
@@ -685,8 +685,8 @@ async function executeReorganize(interaction) {
         status: 'merged',
         mergedInto: canonical.id,
         closedBy: interaction.user.id,
-        closedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        closedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
 
       totalMerged++;
@@ -1023,7 +1023,7 @@ async function refreshTriageEmbed(guild, issue, issueId, reporterCount) {
 async function autocomplete(interaction) {
   const focused = interaction.options.getFocused().toLowerCase();
   try {
-    const db = admin.firestore();
+    const db = getFirestore();
     const snapshot = await db.collection('issues')
       .where('status', 'in', ['open', 'acknowledged', 'escalated'])
       .orderBy('createdAt', 'desc')

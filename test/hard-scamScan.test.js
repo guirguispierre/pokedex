@@ -5,7 +5,23 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const admin = require('firebase-admin');
+
+// Mock firebase-admin/firestore BEFORE requiring scamscan: the service does
+// `const { getFirestore, FieldValue } = require('firebase-admin/firestore')` at
+// load time, so the fake must be in the module cache first. getFirestore()
+// returns a swappable in-memory db; FieldValue provides inert sentinels.
+const _holder = { db: null };
+const _FieldValue = {
+  arrayUnion: (...els) => ({ __op: 'arrayUnion', els }),
+  arrayRemove: (...els) => ({ __op: 'arrayRemove', els }),
+  serverTimestamp: () => ({ __op: 'serverTimestamp' }),
+  increment: (n) => ({ __op: 'increment', n }),
+};
+const _fsPath = require.resolve('firebase-admin/firestore');
+require.cache[_fsPath] = {
+  id: _fsPath, filename: _fsPath, loaded: true,
+  exports: { getFirestore: () => _holder.db, FieldValue: _FieldValue },
+};
 
 const scamscan = require('../src/services/scamscan');
 const {
@@ -27,20 +43,9 @@ const { dhashFromGrayscale, hammingDistance, isHashMatch } = require('../src/ser
 const DAY = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
-// Firestore stub: replace the callable admin.firestore while keeping FieldValue
-// so the module's getDb()/CONFIG_DOC()/HASHES() work against in-memory data.
+// Firestore stub: point the mocked getFirestore() at an in-memory fake db so the
+// module's getDb()/CONFIG_DOC()/HASHES() work against in-memory data.
 // ---------------------------------------------------------------------------
-// admin.firestore is a getter on the namespace prototype (no setter), so a plain
-// assignment is ignored. Capture the original and shadow it with an own data
-// property via defineProperty; restore by deleting the own property.
-const realFirestore = admin.firestore;
-
-function setFirestore(fn) {
-  Object.defineProperty(admin, 'firestore', {
-    value: fn, writable: true, configurable: true, enumerable: true,
-  });
-}
-
 function installFakeFirestore({ configData = undefined, configThrows = false, hashDocs = [], hashesThrow = false } = {}) {
   // Track the last write so we can assert merge/set payloads.
   const state = { lastSet: null, added: [], configData };
@@ -95,16 +100,12 @@ function installFakeFirestore({ configData = undefined, configThrows = false, ha
     },
   };
 
-  const fn = () => fakeDb;
-  // Preserve FieldValue / static helpers used by the module.
-  Object.assign(fn, realFirestore);
-  setFirestore(fn);
+  _holder.db = fakeDb;
   return state;
 }
 
 function restoreFirestore() {
-  // Remove the own-property shadow so the prototype getter is visible again.
-  delete admin.firestore;
+  _holder.db = null;
 }
 
 // Bust the module-level config cache between config tests by stubbing then

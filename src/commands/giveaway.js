@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 const moduleExports = {
@@ -92,10 +92,10 @@ async function handleStart(interaction) {
     messageId: giveawayMessage.id,
     prize,
     winners,
-    endTime: admin.firestore.Timestamp.fromDate(new Date(endTime)),
+    endTime: Timestamp.fromDate(new Date(endTime)),
     ended: false,
     hostId: interaction.user.id,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   };
 
   await db.collection('giveaways').doc(giveawayMessage.id).set(giveawayData);

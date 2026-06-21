@@ -1,7 +1,7 @@
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 const COL = () => getDb().collection('color_roles');
@@ -94,7 +94,7 @@ async function setPaletteEntry(name, hex, roleId) {
 
 async function deletePaletteEntry(name) {
   await COL().doc('palette').set(
-    { colors: { [name]: admin.firestore.FieldValue.delete() } },
+    { colors: { [name]: FieldValue.delete() } },
     { merge: true },
   );
 }

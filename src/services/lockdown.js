@@ -1,8 +1,8 @@
-const admin = require('firebase-admin');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 
 function getDb() {
-  return admin.firestore();
+  return getFirestore();
 }
 
 const DOC = () => getDb().collection('config').doc('lockdown');
@@ -86,14 +86,14 @@ async function getExcludedChannels() {
 
 async function addExcludedChannel(id) {
   await DOC().set(
-    { excludeChannelIds: admin.firestore.FieldValue.arrayUnion(id) },
+    { excludeChannelIds: FieldValue.arrayUnion(id) },
     { merge: true },
   );
 }
 
 async function removeExcludedChannel(id) {
   await DOC().set(
-    { excludeChannelIds: admin.firestore.FieldValue.arrayRemove(id) },
+    { excludeChannelIds: FieldValue.arrayRemove(id) },
     { merge: true },
   );
 }
@@ -106,10 +106,10 @@ async function recordLockdown({ channels, lockedBy, reason }) {
   const data = {
     lockedBy,
     reason: reason || null,
-    lockedAt: admin.firestore.FieldValue.serverTimestamp(),
+    lockedAt: FieldValue.serverTimestamp(),
   };
   if (channels.length > 0) {
-    data.lockedChannels = admin.firestore.FieldValue.arrayUnion(...channels);
+    data.lockedChannels = FieldValue.arrayUnion(...channels);
   }
   await DOC().set(data, { merge: true });
 }
@@ -134,7 +134,7 @@ async function clearLockdown() {
 async function removeLockedChannels(channels) {
   if (!channels || channels.length === 0) return;
   await DOC().set(
-    { lockedChannels: admin.firestore.FieldValue.arrayRemove(...channels) },
+    { lockedChannels: FieldValue.arrayRemove(...channels) },
     { merge: true },
   );
 }

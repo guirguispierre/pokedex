@@ -169,11 +169,11 @@ async function handleReopen(interaction) {
   if (issue.status === 'open') return interaction.editReply(`Issue \`${issueId}\` is already open.`);
   if (issue.status === 'deleted') {
     // Clear deletion metadata when reopening a soft-deleted issue
-    const admin = require('firebase-admin');
-    const db = admin.firestore();
+    const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+    const db = getFirestore();
     await db.collection('issues').doc(issueId).update({
-      deletedAt: admin.firestore.FieldValue.delete(),
-      deletedBy: admin.firestore.FieldValue.delete(),
+      deletedAt: FieldValue.delete(),
+      deletedBy: FieldValue.delete(),
     });
   }
 
@@ -214,11 +214,11 @@ async function handleRevive(interaction) {
   if (issue.status !== 'open') {
     // Clear deletion metadata if it was soft-deleted
     if (issue.status === 'deleted') {
-      const admin = require('firebase-admin');
-      const db = admin.firestore();
+      const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+      const db = getFirestore();
       await db.collection('issues').doc(issueId).update({
-        deletedAt: admin.firestore.FieldValue.delete(),
-        deletedBy: admin.firestore.FieldValue.delete(),
+        deletedAt: FieldValue.delete(),
+        deletedBy: FieldValue.delete(),
       });
     }
     await firestore.updateIssueStatus(issueId, 'open', null);
