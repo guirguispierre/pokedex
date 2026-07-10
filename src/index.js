@@ -28,7 +28,7 @@ const changelogCommand = commandMap.get('changelog');
 const statusCommand = commandMap.get('status');
 const recipesCommand = commandMap.get('recipes');
 const raffleCommand = commandMap.get('raffle');
-const deletedMessagesCommand = commandMap.get('deletedmessages');
+const graveyardCommand = commandMap.get('graveyard');
 const excludeContextCommand = commandMap.get('Exclude from Pokedex');
 const addContextMessageCommand = commandMap.get('Add to Pokedex context');
 const { createFetcher } = require('./services/statusFetcher');
@@ -176,14 +176,14 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-// Track deleted messages per author for the /deletedmessages leaderboard.
+// Track deleted messages per author for the /graveyard leaderboard.
 // Firebase-backed, so it no-ops in local dev without Firebase.
 client.on('messageDelete', async (message) => {
-  await runFirebaseFeature('deleted message tracking', () => deletedMessagesCommand.trackDeletedMessage(message));
+  await runFirebaseFeature('deleted message tracking', () => graveyardCommand.trackDeletedMessage(message));
 });
 
 client.on('messageDeleteBulk', async (messages) => {
-  await runFirebaseFeature('bulk deleted message tracking', () => deletedMessagesCommand.trackBulkDeletedMessages(messages));
+  await runFirebaseFeature('bulk deleted message tracking', () => graveyardCommand.trackBulkDeletedMessages(messages));
 });
 
 client.on('threadCreate', async (thread) => {

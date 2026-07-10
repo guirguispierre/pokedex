@@ -7,8 +7,8 @@ const { loadCommands, toRegistrationBody } = require('../src/commandLoader');
 const EXPECTED_NAMES = [
   'Add to Pokedex context', 'Exclude from Pokedex',
   'addcontext', 'afk', 'automod', 'autoscrape', 'backfill-numbers', 'ban',
-  'changelog', 'color', 'config', 'creator', 'deletedmessages', 'deletethread', 'exclude',
-  'feedback', 'feedback-triage', 'giveaway', 'help', 'issue', 'kick',
+  'changelog', 'color', 'config', 'creator', 'deletethread', 'exclude',
+  'feedback', 'feedback-triage', 'giveaway', 'graveyard', 'help', 'issue', 'kick',
   'leaderboard', 'level', 'lock', 'lockall', 'merge', 'mute', 'ping',
   'pokedexbug', 'poll', 'purge', 'raffle', 'reactionrole', 'recipes',
   'serverinfo', 'slowmode', 'starboard', 'status', 'suggest',

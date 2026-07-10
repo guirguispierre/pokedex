@@ -1,19 +1,19 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const admin = require('firebase-admin');
 
-// Deleted-message tracking lives in the `deletedMessages` collection, keyed by
-// `${guildId}_${userId}` — mirroring the `levels` collection used by /level so
-// the leaderboard query (where guildId == …, orderBy count desc) matches an
-// existing composite-index pattern.
+// Deleted-message tallies live in the `deletedMessages` collection, keyed by
+// `${guildId}_${userId}`. The board query filters by guildId only (a single-field
+// index Firestore provides automatically) and sorts in memory — this avoids
+// requiring a deployed composite index, which otherwise makes the query throw.
 function getDb() {
   return admin.firestore();
 }
 
 const commandData = new SlashCommandBuilder()
-  .setName('deletedmessages')
-  .setDescription('See who has the most deleted messages')
+  .setName('graveyard')
+  .setDescription('See whose messages have met their end the most')
   .addSubcommand(sub =>
-    sub.setName('leaderboard')
+    sub.setName('board')
       .setDescription('View the deleted-messages leaderboard (visible to everyone)')
       .addIntegerOption(opt =>
         opt.setName('limit')
@@ -29,12 +29,12 @@ const commandData = new SlashCommandBuilder()
 
 async function execute(interaction) {
   const sub = interaction.options.getSubcommand();
-  if (sub === 'leaderboard') return handleLeaderboard(interaction);
+  if (sub === 'board') return handleBoard(interaction);
   if (sub === 'check') return handleCheck(interaction);
 }
 
 // Both viewing subcommands reply publicly so the whole server sees the results.
-async function handleLeaderboard(interaction) {
+async function handleBoard(interaction) {
   await interaction.deferReply();
   const guildId = interaction.guild.id;
   const limit = Math.min(interaction.options.getInteger('limit') || 10, 25);
@@ -42,29 +42,30 @@ async function handleLeaderboard(interaction) {
   const db = getDb();
   const snapshot = await db.collection('deletedMessages')
     .where('guildId', '==', guildId)
-    .orderBy('count', 'desc')
-    .limit(limit)
     .get();
 
-  if (snapshot.empty) {
+  const rows = snapshot.docs
+    .map(doc => doc.data())
+    .filter(d => (d.count || 0) > 0)
+    .sort((a, b) => (b.count || 0) - (a.count || 0))
+    .slice(0, limit);
+
+  if (rows.length === 0) {
     return interaction.editReply('No deleted messages tracked yet.');
   }
 
-  const lines = [];
-  let position = 1;
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
+  const lines = rows.map((data, i) => {
+    const position = i + 1;
     const count = data.count || 0;
     const medal = position === 1 ? '🥇' : position === 2 ? '🥈' : position === 3 ? '🥉' : `**${position}.**`;
-    lines.push(`${medal} <@${data.userId}> — **${count.toLocaleString()}** deleted message${count === 1 ? '' : 's'}`);
-    position++;
-  }
+    return `${medal} <@${data.userId}> — **${count.toLocaleString()}** deleted message${count === 1 ? '' : 's'}`;
+  });
 
   const embed = new EmbedBuilder()
-    .setTitle('🗑️ Deleted Messages Leaderboard')
+    .setTitle('⚰️ Message Graveyard')
     .setColor(0xe74c3c)
     .setDescription(lines.join('\n'))
-    .setFooter({ text: `Top ${snapshot.size} members • /deletedmessages check to see your count` })
+    .setFooter({ text: `Top ${rows.length} members • /graveyard check to see your count` })
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });
@@ -82,7 +83,7 @@ async function handleCheck(interaction) {
   const embed = new EmbedBuilder()
     .setColor(0xe74c3c)
     .setAuthor({ name: target.username, iconURL: target.displayAvatarURL({ size: 64 }) })
-    .setTitle('🗑️ Deleted Messages')
+    .setTitle('⚰️ Message Graveyard')
     .setDescription(`<@${target.id}> has had **${count.toLocaleString()}** message${count === 1 ? '' : 's'} deleted.`)
     .setTimestamp();
 
