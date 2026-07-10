@@ -85,6 +85,8 @@ const CATEGORIES = {
     commands: [
       '`/level check [user]` — View XP, level, and rank',
       '`/level top [limit]` — Server XP leaderboard',
+      '`/deletedmessages leaderboard [limit]` — Most deleted messages (shown to everyone)',
+      '`/deletedmessages check [user]` — Deleted-message count for a user',
       '`/afk [reason]` — Toggle AFK status',
       '`/serverinfo` — Server stats and member counts',
       '`/leaderboard [type]` — Top bug reporters & stats',

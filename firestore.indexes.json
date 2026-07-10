@@ -34,6 +34,14 @@
       ]
     },
     {
+      "collectionGroup": "deletedMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "guildId", "order": "ASCENDING" },
+        { "fieldPath": "count", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "infractions",
       "queryScope": "COLLECTION",
       "fields": [
