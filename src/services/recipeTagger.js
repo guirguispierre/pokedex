@@ -1,4 +1,5 @@
 const { getConfig } = require('../config/config');
+const { hasOpenRouterConfig } = require('../config/featureGates');
 const { extractTags: fallbackExtractTags } = require('../recipes/extractors');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -77,6 +78,10 @@ function fallbackTags(title, description) {
  */
 async function generateRecipeTags({ title, description, url, source }) {
   const model = getConfig('model');
+
+  if (!hasOpenRouterConfig()) {
+    return fallbackTags(title, description);
+  }
 
   const userContent = [
     `Title: ${title || 'unknown'}`,

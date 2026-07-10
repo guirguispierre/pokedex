@@ -3,6 +3,7 @@
  */
 
 const { getConfig } = require('../config/config');
+const { hasOpenRouterConfig } = require('../config/featureGates');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -66,6 +67,7 @@ function findDuplicate(newSummary, newText, existingIssues, threshold = 0.4) {
  */
 async function findDuplicateAI(newSummary, newCategory, existingIssues, confidenceThreshold = 70) {
   if (!existingIssues || existingIssues.length === 0) return null;
+  if (!hasOpenRouterConfig()) return null;
 
   const model = getConfig('model');
 
@@ -159,6 +161,7 @@ Return ONLY valid JSON.`;
  */
 async function findDuplicateClustersAI(issues) {
   if (!issues || issues.length < 2) return [];
+  if (!hasOpenRouterConfig()) return [];
 
   const model = getConfig('model');
 

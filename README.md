@@ -26,6 +26,7 @@ Built with discord.js 14, Express 5, Firebase/Firestore, and [OpenRouter](https:
 - **Leveling** — XP per message with cooldown; `/level`, `/leaderboard`
 - **AFK** — `/afk` sets status; mentions auto-reply with the AFK message
 - **Giveaways** — `/giveaway` with configurable winners and reroll
+- **Raffles** — `/raffle create` with Join/Leave buttons, slash-command pick/cancel/reroll/entrant list, optional role eligibility, entrant caps, deadlines, and image galleries
 - **Polls** — `/poll` with auto-close and results tally
 - **Reaction roles** — `/reactionrole` to wire up self-assign menus
 - **Starboard** — Configurable channel and star threshold
@@ -71,12 +72,15 @@ cp .env.example .env
 | `DISCORD_TOKEN` | yes | Bot token from Discord Developer Portal |
 | `DISCORD_APP_ID` | yes | Application ID |
 | `DISCORD_GUILD_ID` | yes | Server ID (right-click server → Copy Server ID) |
-| `OPENROUTER_API_KEY` | yes | OpenRouter API key |
-| `FIREBASE_PROJECT_ID` | yes | Firebase project ID |
-| `FIREBASE_CLIENT_EMAIL` | yes | Service account email |
-| `FIREBASE_PRIVATE_KEY` | yes | Private key from Firebase service account JSON |
+| `OPENROUTER_API_KEY` | no | OpenRouter API key; AI classification/tagging falls back or disables when omitted |
+| `FIREBASE_PROJECT_ID` | no | Firebase project ID; Firebase-backed persistence/features disable when omitted |
+| `FIREBASE_CLIENT_EMAIL` | no | Service account email; Firebase-backed persistence/features disable when omitted |
+| `FIREBASE_PRIVATE_KEY` | no | Private key from Firebase service account JSON; keep `\\n` escapes |
 | `DASHBOARD_API_KEY` | no | API key for dashboard endpoints; omit to allow localhost only |
 | `DASHBOARD_PORT` | no | Dashboard port (default `3000`) |
+| `POKEDEX_DISABLE_TRIAGE` | no | Set to `true` to skip posting issue embeds to the triage channel in local dev |
+
+Local development can run without Firebase, OpenRouter, or a triage channel. Missing Firebase disables persistence-backed features such as issue storage, moderation state, reaction roles, starboard, levels, welcome config, forum/thread issue tracking, and Pokedex context actions. Missing OpenRouter disables AI-backed classification/deduplication/tagging and uses local fallbacks where available. `POKEDEX_DISABLE_TRIAGE=true` disables triage-channel checks and issue embed posting.
 
 ### 3. Discord Developer Portal
 
@@ -111,7 +115,7 @@ Use `/help` in Discord for the live, grouped list. A summary:
 |----------|----------|
 | Issues | `/issue`, `/merge`, `/pokedexbug`, `/feedback`, `/feedbacktriage`, `/leaderboard` |
 | Moderation | `/automod`, `/ban`, `/kick`, `/mute`, `/unmute`, `/warn`, `/purge`, `/lock`, `/unlock`, `/slowmode`, `/deletethread` |
-| Community | `/level`, `/afk`, `/giveaway`, `/poll`, `/reactionrole`, `/starboard`, `/suggest` |
+| Community | `/level`, `/afk`, `/giveaway`, `/raffle`, `/poll`, `/reactionrole`, `/starboard`, `/suggest` |
 | Content | `/recipes` |
 | Admin | `/config`, `/autoscrape` |
 | Meta | `/help`, `/ping`, `/serverinfo`, `/changelog` |
@@ -186,7 +190,7 @@ src/
 
 ### Firestore collections
 
-`issues`, `config`, `automod` (with `config` / `blocklist` / `links` / `exemptions` sub-documents), `levels`, `infractions`, `suggestions`, `suggest_config`, `giveaways`, `starboard_config`, `starboard_posts`, `recipes`, `feedback`, `reaction_roles`, `welcome_config`.
+`issues`, `config`, `automod` (with `config` / `blocklist` / `links` / `exemptions` sub-documents), `levels`, `infractions`, `suggestions`, `suggest_config`, `giveaways`, `raffles`, `starboard_config`, `starboard_posts`, `recipes`, `feedback`, `reaction_roles`, `welcome_config`.
 
 ## License
 

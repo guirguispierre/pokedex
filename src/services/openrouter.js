@@ -1,6 +1,17 @@
 const { getConfig } = require('../config/config');
+const { hasOpenRouterConfig } = require('../config/featureGates');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+function openRouterDisabledResult(text, reason = 'OpenRouter disabled: OPENROUTER_API_KEY is missing') {
+  return {
+    priority: 'unclassified',
+    category: 'other',
+    summary: String(text || '').slice(0, 100),
+    reasoning: reason,
+    raw: null,
+  };
+}
 
 function buildSystemPrompt() {
   const priorities = getConfig('priorities');
@@ -65,6 +76,10 @@ function validateResponse(parsed) {
 async function classifyIssue(text) {
   const model = getConfig('model');
 
+  if (!hasOpenRouterConfig()) {
+    return openRouterDisabledResult(text);
+  }
+
   try {
     const response = await fetch(OPENROUTER_URL, {
       method: 'POST',
@@ -120,6 +135,10 @@ async function classifyIssue(text) {
 
 async function evaluateIssueContext(issue, conversationHistory, extraHint) {
   const model = getConfig('model');
+
+  if (!hasOpenRouterConfig()) {
+    return { ...normalizeEvaluation({}), responseMode: 'ignore', shouldReply: false };
+  }
 
   const transcript = conversationHistory
     .map(m => `[${m.role || (m.isBot ? 'BOT' : 'OTHER')}] ${m.content}`)
@@ -292,6 +311,10 @@ function normalizeEvaluation(parsed = {}) {
 
 async function callWithTools({ messages, tools, images = [], model: overrideModel, maxTokens = 2000 }) {
   const model = overrideModel || getConfig('model');
+
+  if (!hasOpenRouterConfig()) {
+    throw new Error('OpenRouter disabled: OPENROUTER_API_KEY is missing');
+  }
 
   // Inject images into the first user message if provided.
   const payloadMessages = messages.map(m => ({ ...m }));

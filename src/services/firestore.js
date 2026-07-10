@@ -1,16 +1,73 @@
 const admin = require('firebase-admin');
+const { describeMissingFirebase, hasFirebaseConfig } = require('../config/featureGates');
 
 let db;
+let firebaseEnabled = false;
+let disabledReason = null;
+let warnedDisabled = false;
+let localIssueNumber = 0;
 
 function init() {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-  });
-  db = admin.firestore();
+  if (!hasFirebaseConfig()) {
+    const missing = describeMissingFirebase().join(', ');
+    disabledReason = missing ? `missing or invalid ${missing}` : 'missing Firebase configuration';
+    firebaseEnabled = false;
+    console.warn(`[firebase] disabled for this process (${disabledReason}). Firebase-backed features will no-op.`);
+    return;
+  }
+
+  try {
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        }),
+      });
+    }
+    db = admin.firestore();
+    firebaseEnabled = true;
+    disabledReason = null;
+  } catch (err) {
+    db = null;
+    firebaseEnabled = false;
+    disabledReason = err.message;
+    console.warn(`[firebase] disabled for this process (${err.message}). Firebase-backed features will no-op.`);
+  }
+}
+
+function isEnabled() {
+  return firebaseEnabled && !!db;
+}
+
+function getDisabledReason() {
+  return disabledReason;
+}
+
+function warnDisabled(feature) {
+  if (warnedDisabled) return;
+  warnedDisabled = true;
+  console.warn(`[firebase] ${feature} skipped because Firebase is disabled.`);
+}
+
+function localIssueId() {
+  localIssueNumber += 1;
+  return `local-${localIssueNumber}`;
+}
+
+function emptyIssueCounts() {
+  return { open: 0, closed: 0, resolved: 0, total: 0, byPriority: {} };
+}
+
+function gate(name, fn, fallback, options = {}) {
+  return async (...args) => {
+    if (isEnabled() || (options.allowExplicitDb && args[0])) {
+      return fn(...args);
+    }
+    warnDisabled(name);
+    return typeof fallback === 'function' ? fallback(...args) : fallback;
+  };
 }
 
 async function isDuplicate(messageId) {
@@ -611,57 +668,108 @@ async function getPublishedFeedback(limit = 200) {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
+// --- Raffles ---
+
+async function saveRaffle(raffleData) {
+  await db.collection('raffles').doc(raffleData.messageId).set({
+    ...raffleData,
+    updatedAt: Date.now(),
+  }, { merge: true });
+  return raffleData.messageId;
+}
+
+async function getRaffle(messageId) {
+  const doc = await db.collection('raffles').doc(messageId).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() };
+}
+
+async function updateRaffle(messageId, patch) {
+  await db.collection('raffles').doc(messageId).set({
+    ...patch,
+    updatedAt: Date.now(),
+  }, { merge: true });
+}
+
+async function listActiveRaffles(limit = 100) {
+  const snapshot = await db.collection('raffles')
+    .where('endedAt', '==', null)
+    .limit(Math.min(limit, 500))
+    .get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function listRaffles(limit = 100) {
+  const snapshot = await db.collection('raffles')
+    .orderBy('updatedAt', 'desc')
+    .limit(Math.min(limit, 500))
+    .get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+const noOp = undefined;
+const emptyArray = [];
+const emptyObject = {};
+const nullValue = null;
+
 module.exports = {
   init,
-  isDuplicate,
-  allocateIssueNumber,
-  saveIssue,
-  getIssuesSince,
-  getAllConfigOverrides,
-  setConfigOverride,
-  deleteConfigOverride,
-  updateIssueTriageMessageId,
-  updateIssueTriageChannelId,
-  updateIssueThreadId,
-  getIssueByThreadId,
-  appendThreadContext,
-  updateIssueClassification,
-  getIssueById,
-  updateIssueStatus,
-  getOpenIssues,
-  getIssueCounts,
-  getAllIssues,
-  getRecentIssuesByReporter,
-  searchIssues,
-  assignIssue,
-  addIssueNote,
-  updateIssueFields,
-  addReporter,
-  getForumIssues,
-  getAllIssuesWithThreadId,
-  saveRecipe,
-  getAllRecipes,
-  getAllRecipesUncapped,
-  getApprovedRecipes,
-  getPendingRecipes,
-  getRecipeById,
-  getRecipeByUrl,
-  updateRecipeStatus,
-  deleteRecipe,
-  saveFeedback,
-  getPublishedFeedback,
-  setIssueLastEvaluatedAt,
-  updateIssueResolution,
-  searchOpenIssuesForAgent,
-  getGapByKey,
-  createGap,
-  updateGap,
-  incrementQuestionTurns,
-  setIdentityDisclosed,
-  addExcludedMessageIds,
-  setExcludeMode,
-  clearExclusions,
-  listOpenIssuesMissingNumbers,
-  setIssueNumberIfMissing,
-  appendAdditionalContext,
+  isEnabled,
+  getDisabledReason,
+  isDuplicate: gate('isDuplicate', isDuplicate, false),
+  allocateIssueNumber: gate('allocateIssueNumber', allocateIssueNumber, () => ++localIssueNumber, { allowExplicitDb: true }),
+  saveIssue: gate('saveIssue', saveIssue, localIssueId),
+  getIssuesSince: gate('getIssuesSince', getIssuesSince, emptyArray),
+  getAllConfigOverrides: gate('getAllConfigOverrides', getAllConfigOverrides, emptyObject),
+  setConfigOverride: gate('setConfigOverride', setConfigOverride, noOp),
+  deleteConfigOverride: gate('deleteConfigOverride', deleteConfigOverride, noOp),
+  updateIssueTriageMessageId: gate('updateIssueTriageMessageId', updateIssueTriageMessageId, noOp),
+  updateIssueTriageChannelId: gate('updateIssueTriageChannelId', updateIssueTriageChannelId, noOp),
+  updateIssueThreadId: gate('updateIssueThreadId', updateIssueThreadId, noOp),
+  getIssueByThreadId: gate('getIssueByThreadId', getIssueByThreadId, nullValue),
+  appendThreadContext: gate('appendThreadContext', appendThreadContext, nullValue),
+  updateIssueClassification: gate('updateIssueClassification', updateIssueClassification, noOp),
+  getIssueById: gate('getIssueById', getIssueById, nullValue),
+  updateIssueStatus: gate('updateIssueStatus', updateIssueStatus, noOp),
+  getOpenIssues: gate('getOpenIssues', getOpenIssues, emptyArray),
+  getIssueCounts: gate('getIssueCounts', getIssueCounts, emptyIssueCounts),
+  getAllIssues: gate('getAllIssues', getAllIssues, emptyArray),
+  getRecentIssuesByReporter: gate('getRecentIssuesByReporter', getRecentIssuesByReporter, emptyArray),
+  searchIssues: gate('searchIssues', searchIssues, emptyArray),
+  assignIssue: gate('assignIssue', assignIssue, noOp),
+  addIssueNote: gate('addIssueNote', addIssueNote, nullValue),
+  updateIssueFields: gate('updateIssueFields', updateIssueFields, noOp),
+  addReporter: gate('addReporter', addReporter, nullValue),
+  getForumIssues: gate('getForumIssues', getForumIssues, emptyArray),
+  getAllIssuesWithThreadId: gate('getAllIssuesWithThreadId', getAllIssuesWithThreadId, emptyArray),
+  saveRecipe: gate('saveRecipe', saveRecipe, () => ({ id: localIssueId(), updated: false, disabled: true })),
+  getAllRecipes: gate('getAllRecipes', getAllRecipes, emptyArray),
+  getAllRecipesUncapped: gate('getAllRecipesUncapped', getAllRecipesUncapped, emptyArray),
+  getApprovedRecipes: gate('getApprovedRecipes', getApprovedRecipes, emptyArray),
+  getPendingRecipes: gate('getPendingRecipes', getPendingRecipes, emptyArray),
+  getRecipeById: gate('getRecipeById', getRecipeById, nullValue),
+  getRecipeByUrl: gate('getRecipeByUrl', getRecipeByUrl, nullValue),
+  updateRecipeStatus: gate('updateRecipeStatus', updateRecipeStatus, noOp),
+  deleteRecipe: gate('deleteRecipe', deleteRecipe, noOp),
+  saveFeedback: gate('saveFeedback', saveFeedback, () => ({ id: localIssueId(), duplicate: false, disabled: true })),
+  getPublishedFeedback: gate('getPublishedFeedback', getPublishedFeedback, emptyArray),
+  saveRaffle: gate('saveRaffle', saveRaffle, noOp),
+  getRaffle: gate('getRaffle', getRaffle, nullValue),
+  updateRaffle: gate('updateRaffle', updateRaffle, noOp),
+  listActiveRaffles: gate('listActiveRaffles', listActiveRaffles, emptyArray),
+  listRaffles: gate('listRaffles', listRaffles, emptyArray),
+  setIssueLastEvaluatedAt: gate('setIssueLastEvaluatedAt', setIssueLastEvaluatedAt, noOp),
+  updateIssueResolution: gate('updateIssueResolution', updateIssueResolution, noOp),
+  searchOpenIssuesForAgent: gate('searchOpenIssuesForAgent', searchOpenIssuesForAgent, emptyArray),
+  getGapByKey: gate('getGapByKey', getGapByKey, nullValue),
+  createGap: gate('createGap', createGap, () => null),
+  updateGap: gate('updateGap', updateGap, noOp),
+  incrementQuestionTurns: gate('incrementQuestionTurns', incrementQuestionTurns, noOp),
+  setIdentityDisclosed: gate('setIdentityDisclosed', setIdentityDisclosed, noOp),
+  addExcludedMessageIds: gate('addExcludedMessageIds', addExcludedMessageIds, noOp),
+  setExcludeMode: gate('setExcludeMode', setExcludeMode, noOp),
+  clearExclusions: gate('clearExclusions', clearExclusions, noOp),
+  listOpenIssuesMissingNumbers: gate('listOpenIssuesMissingNumbers', listOpenIssuesMissingNumbers, emptyArray),
+  setIssueNumberIfMissing: gate('setIssueNumberIfMissing', setIssueNumberIfMissing, false),
+  appendAdditionalContext: gate('appendAdditionalContext', appendAdditionalContext, nullValue),
 };

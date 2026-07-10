@@ -11,6 +11,10 @@ const PRIORITY_COLORS = {
   unclassified: 0x808080,
 };
 
+function isTriageEnabled() {
+  return process.env.POKEDEX_DISABLE_TRIAGE !== 'true' && getConfig('triage_enabled') !== false;
+}
+
 function buildTriageButtons(issueId) {
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -143,6 +147,8 @@ function findTriageChannel(guild, target = 'poke_product') {
 }
 
 async function postIssueEmbed(guild, issue, issueId) {
+  if (!isTriageEnabled()) return null;
+
   const outputMode = getConfig('output_mode');
   if (outputMode === 'summary') return null;
 
@@ -234,6 +240,8 @@ async function postDigest(guild) {
 }
 
 function startDigestScheduler(guild) {
+  if (!isTriageEnabled()) return null;
+
   const outputMode = getConfig('output_mode');
   if (outputMode !== 'summary' && outputMode !== 'both') return null;
 
@@ -245,4 +253,4 @@ function startDigestScheduler(guild) {
   }, { timezone: 'UTC' });
 }
 
-module.exports = { postIssueEmbed, startDigestScheduler, findTriageChannel, buildIssueEmbed, buildTriageButtons };
+module.exports = { postIssueEmbed, startDigestScheduler, findTriageChannel, buildIssueEmbed, buildTriageButtons, isTriageEnabled };

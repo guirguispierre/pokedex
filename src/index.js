@@ -27,6 +27,7 @@ const welcomeCommand = commandMap.get('welcome');
 const changelogCommand = commandMap.get('changelog');
 const statusCommand = commandMap.get('status');
 const recipesCommand = commandMap.get('recipes');
+const raffleCommand = commandMap.get('raffle');
 const excludeContextCommand = commandMap.get('Exclude from Pokedex');
 const addContextMessageCommand = commandMap.get('Add to Pokedex context');
 const { createFetcher } = require('./services/statusFetcher');
@@ -39,6 +40,7 @@ const {
 } = require('./services/mcpApproval');
 const { startDashboard } = require('./dashboard/server');
 const { safeInteractionReply } = require('./utils/safeInteractionReply');
+const { hasOpenRouterConfig } = require('./config/featureGates');
 
 const client = new Client({
   intents: [
@@ -51,6 +53,25 @@ const client = new Client({
   ],
   partials: [Partials.Message, Partials.Reaction],
 });
+
+function firebaseUnavailableMessage(feature = 'This feature') {
+  const reason = firestore.getDisabledReason?.();
+  return `${feature} is disabled in local dev because Firebase is not configured${reason ? ` (${reason})` : ''}.`;
+}
+
+function openRouterUnavailableMessage(feature = 'This feature') {
+  return `${feature} is disabled in local dev because OPENROUTER_API_KEY is not configured.`;
+}
+
+async function runFirebaseFeature(label, fn) {
+  if (!firestore.isEnabled()) return false;
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`Error in ${label}:`, err);
+    return false;
+  }
+}
 
 // Register slash commands guild-scoped
 async function registerCommands() {
@@ -73,17 +94,21 @@ client.once('clientReady', async () => {
 
   // Check for triage channel
   const guild = client.guilds.cache.get(process.env.DISCORD_GUILD_ID);
-  if (guild) {
+  if (guild && triage.isTriageEnabled()) {
     const triageChannel = triage.findTriageChannel(guild);
     if (!triageChannel) {
-      const warning = `WARNING: Triage channel "${config.getConfig('triage_channel')}" not found. Please create it and restart the bot.`;
+      const warning = `WARNING: Triage channel "${config.getConfig('triage_channel')}" not found. Please create it and restart the bot, or set POKEDEX_DISABLE_TRIAGE=true for local dev.`;
       console.warn(warning);
       guild.systemChannel?.send(warning).catch(() => {});
     }
 
     // Start digest scheduler
     triage.startDigestScheduler(guild);
+  } else if (guild) {
+    console.log('[triage] disabled (POKEDEX_DISABLE_TRIAGE=true)');
   }
+
+  raffleCommand.resumeActiveRaffles(client).catch((err) => console.error('[raffle] failed to resume active raffles:', err));
 
   if (config.getConfig('status_enabled')) {
     try {
@@ -109,32 +134,19 @@ client.once('clientReady', async () => {
 
 // Handle @mentions, thread follow-ups, and webhook pending messages
 client.on('messageCreate', async (message) => {
-  if (message.webhookId) {
-    try {
-      const handled = await syncPendingWebhookMessage(message);
-      if (handled) return;
-    } catch (err) {
-      console.error('Error handling webhook pending:', err);
-    }
+  if (message.webhookId && firestore.isEnabled()) {
+    const handled = await runFirebaseFeature('webhook pending', () => syncPendingWebhookMessage(message));
+    if (handled) return;
   }
 
   if (message.author.bot) return;
 
-  // AutoMod — check for spam, blocked content, etc. before other handlers
-  try {
-    const automodResult = await automod.handleMessage(message);
-    if (automodResult) return; // Message was handled by automod (deleted)
-  } catch (err) {
-    console.error('Error in automod:', err);
-  }
+  // AutoMod and scam scanning are Firebase-backed; skip them in local dev without Firebase.
+  const automodResult = await runFirebaseFeature('automod', () => automod.handleMessage(message));
+  if (automodResult) return;
 
-  // Image scam scanner — vision scan of new members' images + repost short-circuit
-  try {
-    const scamResult = await scamscan.handleMessage(message);
-    if (scamResult) return; // image removed
-  } catch (err) {
-    console.error('Error in scam scan:', err);
-  }
+  const scamResult = await runFirebaseFeature('scam scan', () => scamscan.handleMessage(message));
+  if (scamResult) return;
 
   // AFK system — runs on every non-bot message (welcome back + mention notices)
   try {
@@ -143,22 +155,14 @@ client.on('messageCreate', async (message) => {
     console.error('Error handling AFK:', err);
   }
 
-  // XP / Level system — award XP for every non-bot message (with cooldown)
-  try {
-    await levelCommand.awardXP(message);
-  } catch (err) {
-    console.error('Error awarding XP:', err);
-  }
+  // XP / Level system — Firebase-backed, so skip in local dev without Firebase.
+  await runFirebaseFeature('awarding XP', () => levelCommand.awardXP(message));
 
   // Check if this is a message in an issue thread — route ALL thread messages
   // through the thread handler first (even @mentions) to prevent duplicate issues
-  if (message.channel.isThread()) {
-    try {
-      const handled = await handleThreadMessage(message);
-      if (handled) return; // Was an issue thread — context appended, don't create new issue
-    } catch (err) {
-      console.error('Error handling thread message:', err);
-    }
+  if (message.channel.isThread() && firestore.isEnabled()) {
+    const handled = await runFirebaseFeature('thread message', () => handleThreadMessage(message));
+    if (handled) return; // Was an issue thread — context appended, don't create new issue
     // Not an issue thread — fall through to mention handler if applicable
   }
 
@@ -172,74 +176,33 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('threadCreate', async (thread) => {
-  try {
-    await handleForumPost(thread);
-  } catch (err) {
-    console.error('Error handling forum post:', err);
-  }
-
-  try {
-    await handleAutoScrape(thread);
-  } catch (err) {
-    console.error('Error in recipe auto-scrape:', err);
-  }
+  await runFirebaseFeature('forum post', () => handleForumPost(thread));
+  await runFirebaseFeature('recipe auto-scrape', () => handleAutoScrape(thread));
 });
 
 // Handle emoji reactions
 client.on('messageReactionAdd', async (reaction, user) => {
-  try {
-    await handleReaction(reaction, user);
-  } catch (err) {
-    console.error('Error handling reaction:', err);
-  }
-
-  // Starboard — check for ⭐ reactions
-  try {
-    await starboardCommand.handleStarReaction(reaction, user);
-  } catch (err) {
-    console.error('Error handling starboard:', err);
-  }
-
-  // Reaction roles — add role on react
-  try {
-    await reactionroleCommand.handleReactionRoleAdd(reaction, user);
-  } catch (err) {
-    console.error('Error handling reaction role add:', err);
-  }
+  await runFirebaseFeature('reaction issue trigger', () => handleReaction(reaction, user));
+  await runFirebaseFeature('starboard', () => starboardCommand.handleStarReaction(reaction, user));
+  await runFirebaseFeature('reaction role add', () => reactionroleCommand.handleReactionRoleAdd(reaction, user));
 });
 
 // Reaction role removal
 client.on('messageReactionRemove', async (reaction, user) => {
-  try {
-    if (reaction.partial) await reaction.fetch().catch(() => {});
-    await reactionroleCommand.handleReactionRoleRemove(reaction, user);
-  } catch (err) {
-    console.error('Error handling reaction role remove:', err);
-  }
+  if (reaction.partial) await reaction.fetch().catch(() => {});
+  await runFirebaseFeature('reaction role remove', () => reactionroleCommand.handleReactionRoleRemove(reaction, user));
 });
 
 // Welcome / Goodbye
 client.on('guildMemberAdd', async (member) => {
-  // AutoMod — raid detection
-  try {
-    await automod.handleJoin(member);
-  } catch (err) {
-    console.error('Error in automod raid check:', err);
-  }
+  // AutoMod raid detection is Firebase-backed; skip in local dev without Firebase.
+  await runFirebaseFeature('automod raid check', () => automod.handleJoin(member));
 
-  try {
-    await welcomeCommand.handleMemberJoin(member);
-  } catch (err) {
-    console.error('Error handling member join:', err);
-  }
+  await runFirebaseFeature('member welcome', () => welcomeCommand.handleMemberJoin(member));
 });
 
 client.on('guildMemberRemove', async (member) => {
-  try {
-    await welcomeCommand.handleMemberLeave(member);
-  } catch (err) {
-    console.error('Error handling member leave:', err);
-  }
+  await runFirebaseFeature('member leave', () => welcomeCommand.handleMemberLeave(member));
 });
 
 // Handle slash commands and button interactions
@@ -260,6 +223,14 @@ client.on('interactionCreate', async (interaction) => {
   // --- Autocomplete interactions ---
   if (interaction.isAutocomplete()) {
     const command = commandMap.get(interaction.commandName);
+    if (command?.requiresFirebase && !firestore.isEnabled()) {
+      await interaction.respond([]).catch(() => {});
+      return;
+    }
+    if (command?.requiresOpenRouter && !hasOpenRouterConfig()) {
+      await interaction.respond([]).catch(() => {});
+      return;
+    }
     if (command?.autocomplete) {
       try {
         await command.autocomplete(interaction);
@@ -272,6 +243,10 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isMessageContextMenuCommand()) {
+    if (!firestore.isEnabled()) {
+      await safeInteractionReply(interaction, firebaseUnavailableMessage('Pokedex context actions'));
+      return;
+    }
     if (interaction.commandName === 'Exclude from Pokedex') {
       try { await excludeContextCommand.execute(interaction); }
       catch (err) { console.error('context-menu exclude failed:', err); await safeInteractionReply(interaction, 'Failed to exclude.'); }
@@ -286,6 +261,15 @@ client.on('interactionCreate', async (interaction) => {
   const command = commandMap.get(interaction.commandName);
   if (!command) return;
 
+  if (command.requiresFirebase && !firestore.isEnabled()) {
+    await safeInteractionReply(interaction, firebaseUnavailableMessage(`/${interaction.commandName}`));
+    return;
+  }
+  if (command.requiresOpenRouter && !hasOpenRouterConfig()) {
+    await safeInteractionReply(interaction, openRouterUnavailableMessage(`/${interaction.commandName}`));
+    return;
+  }
+
   try {
     await command.execute(interaction);
   } catch (err) {
@@ -298,6 +282,11 @@ client.on('interactionCreate', async (interaction) => {
 async function handleButtonInteraction(interaction) {
   const { customId } = interaction;
   const user = interaction.user;
+
+  if (!firestore.isEnabled() && /^(triage_|fb_|mcp_|status_incidents_)/.test(customId)) {
+    await interaction.reply({ content: firebaseUnavailableMessage('This button'), ephemeral: true }).catch(() => {});
+    return;
+  }
 
   // --- Changelog pagination buttons ---
   if (customId.startsWith('changelog_')) {
@@ -501,6 +490,19 @@ async function handleButtonInteraction(interaction) {
       }
     } catch (err) {
       console.error('Failed to re-process as new issue:', err);
+    }
+    return;
+  }
+
+  // --- Raffle buttons ---
+  if (customId.startsWith('raffle_')) {
+    try {
+      await raffleCommand.handleRaffleButton(interaction);
+    } catch (err) {
+      console.error('Failed to process raffle interaction:', err);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: 'Failed to process raffle action.', ephemeral: true }).catch(() => {});
+      }
     }
     return;
   }
