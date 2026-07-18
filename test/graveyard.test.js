@@ -1,4 +1,4 @@
-// Tests for the /deletedmessages command + its message-delete tracking handlers.
+// Tests for the /graveyard command + its message-delete tracking handlers.
 // Firestore is stubbed with an in-memory fake (preserving FieldValue.increment
 // and serverTimestamp semantics) so no network / real Firebase is involved.
 
@@ -6,7 +6,7 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const admin = require('firebase-admin');
 
-const cmd = require('../src/commands/deletedmessages');
+const cmd = require('../src/commands/graveyard');
 
 const realFirestore = admin.firestore;
 
@@ -106,7 +106,7 @@ function makeInteraction(sub, options = {}) {
   };
 }
 
-describe('/deletedmessages tracking', () => {
+describe('/graveyard tracking', () => {
   afterEach(restoreFirestore);
 
   test('trackDeletedMessage increments an author count by one', async () => {
@@ -144,16 +144,16 @@ describe('/deletedmessages tracking', () => {
   });
 });
 
-describe('/deletedmessages viewing (public)', () => {
+describe('/graveyard viewing (public)', () => {
   afterEach(restoreFirestore);
 
-  test('leaderboard replies publicly (deferReply without ephemeral) sorted by count', async () => {
+  test('board replies publicly (deferReply without ephemeral) sorted by count', async () => {
     installFakeFirestore({
       'deletedMessages/g1_u1': { userId: 'u1', guildId: 'g1', username: 'alice', count: 5 },
       'deletedMessages/g1_u2': { userId: 'u2', guildId: 'g1', username: 'bob', count: 9 },
       'deletedMessages/g2_u3': { userId: 'u3', guildId: 'g2', username: 'eve', count: 99 },
     });
-    const interaction = makeInteraction('leaderboard');
+    const interaction = makeInteraction('board');
 
     await cmd.execute(interaction);
 
@@ -168,9 +168,9 @@ describe('/deletedmessages viewing (public)', () => {
     assert.ok(!desc.includes('<@u3>'));
   });
 
-  test('leaderboard handles empty state', async () => {
+  test('board handles empty state', async () => {
     installFakeFirestore();
-    const interaction = makeInteraction('leaderboard');
+    const interaction = makeInteraction('board');
     await cmd.execute(interaction);
     assert.match(interaction.editReply.calls[0][0], /No deleted messages tracked/);
   });
