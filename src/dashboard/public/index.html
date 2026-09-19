@@ -375,6 +375,25 @@
     .admin-list label:hover { background:var(--glass-hover); }
     .admin-list input[type="checkbox"] { accent-color:var(--critical); }
 
+    /* === XP HISTORY CHART === */
+    .xp-panel { padding: 24px; margin-bottom: 40px; }
+    .xp-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin-bottom: 4px;
+    }
+    .xp-title { font-size: 13px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); }
+    .xp-title .subtle { color: var(--text-muted); font-weight: 400; }
+    .xp-chart svg { display: block; width: 100%; height: auto; }
+    .xp-axis { font-family: 'Fira Code', monospace; font-size: 10px; fill: var(--text-muted); }
+    .xp-grid { stroke: rgba(255,255,255,0.05); }
+    .xp-dot { fill: var(--gold); }
+    .xp-dot:focus, .xp-dot:hover { fill: #fff; }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
     /* Animations */
     @keyframes slideUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
     .anim { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
@@ -471,6 +490,25 @@
         <p>No issues match your filters</p>
       </div>
     </div>
+
+    <div class="xp-panel glass anim" style="animation-delay:0.2s">
+      <div class="xp-head">
+        <div class="xp-title">XP History <span class="subtle">· last 30 days</span></div>
+        <select class="filter-select" id="xp-user" aria-label="Member to chart">
+          <option value="">All members</option>
+        </select>
+      </div>
+      <div class="state-msg" id="xp-loading" style="padding:48px 20px;"><p class="loading-dots">Loading</p></div>
+      <div class="state-msg" id="xp-error" style="display:none;padding:48px 20px;" role="alert">
+        <div class="icon">&#9888;&#65038;</div>
+        <p>Failed to load XP history</p>
+      </div>
+      <div class="state-msg" id="xp-empty" style="display:none;padding:48px 20px;">
+        <div class="icon">&#128200;</div>
+        <p>No XP recorded yet — the chart fills in as members chat</p>
+      </div>
+      <div class="xp-chart" id="xp-chart" style="display:none;"></div>
+    </div>
   </div>
 
   <!-- Detail -->
@@ -514,6 +552,7 @@
         filterIssues();
         document.getElementById('loading').style.display = 'none';
       } catch { document.getElementById('loading').innerHTML = '<p>Failed to connect</p>'; }
+      loadXpHistory();
     }
 
     function filterIssues() {
@@ -620,6 +659,132 @@
     document.addEventListener('keydown', e => { if (e.key==='Escape') closeDetail(); });
 
     function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+    // === XP history chart ===
+    let xpHistory = null;
+
+    async function loadXpHistory() {
+      try {
+        const r = await fetch('/api/xp-history?days=30');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        xpHistory = await r.json();
+        const sel = document.getElementById('xp-user');
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">All members</option>' +
+          (xpHistory.users || []).map(u => `<option value="${esc(u.userId)}">${esc(u.username)}</option>`).join('');
+        sel.value = prev;
+        document.getElementById('xp-loading').style.display = 'none';
+        document.getElementById('xp-error').style.display = 'none';
+        renderXpChart();
+      } catch {
+        document.getElementById('xp-loading').style.display = 'none';
+        document.getElementById('xp-error').style.display = 'block';
+      }
+    }
+
+    function renderXpChart() {
+      const chartEl = document.getElementById('xp-chart');
+      const emptyEl = document.getElementById('xp-empty');
+      if (!xpHistory) return;
+
+      const sel = document.getElementById('xp-user');
+      let label = 'All members';
+      let series = xpHistory.totals;
+      if (sel.value) {
+        const u = (xpHistory.users || []).find(x => x.userId === sel.value);
+        if (u) { label = u.username; series = u.daily; }
+      }
+
+      if (!series || !series.some(v => v > 0)) {
+        chartEl.style.display = 'none';
+        chartEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+      }
+      emptyEl.style.display = 'none';
+      chartEl.style.display = 'block';
+      const svg = buildXpChartSvg(xpHistory.days, series, label, chartEl.clientWidth);
+      chartEl.innerHTML = svg + buildXpTable(xpHistory.days, series, label);
+    }
+
+    // Smallest "nice" number (1/2/5 x 10^k) >= v, so axis ticks stay round.
+    function niceCeil(v) {
+      if (v <= 0) return 1;
+      const base = Math.pow(10, Math.floor(Math.log10(v)));
+      const m = v / base;
+      return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * base;
+    }
+
+    function fmtDay(d) {
+      return new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    }
+
+    function fmtNum(v) {
+      return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(1);
+    }
+
+    function buildXpChartSvg(days, series, label, width) {
+      const W = Math.max(width || 600, 280);
+      const H = 240;
+      const padL = 46, padR = 14, padT = 14, padB = 30;
+      const iw = W - padL - padR, ih = H - padT - padB;
+      const n = days.length;
+      const max = niceCeil(Math.max(...series));
+      const x = i => padL + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+      const y = v => padT + ih - (v / max) * ih;
+      const base = (padT + ih).toFixed(1);
+
+      const pts = series.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+      const line = `M${pts.join(' L')}`;
+      const area = `${line} L${x(n - 1).toFixed(1)},${base} L${x(0).toFixed(1)},${base} Z`;
+
+      const grid = [];
+      for (let t = 0; t <= 4; t++) {
+        const v = (max / 4) * t;
+        const gy = y(v).toFixed(1);
+        grid.push(`<line class="xp-grid" x1="${padL}" y1="${gy}" x2="${W - padR}" y2="${gy}"/>`);
+        grid.push(`<text class="xp-axis" x="${padL - 8}" y="${y(v) + 3}" text-anchor="end">${fmtNum(v)}</text>`);
+      }
+
+      const xlabels = [];
+      const labelEvery = Math.ceil(n / 6);
+      days.forEach((d, i) => {
+        if (i % labelEvery !== 0) return;
+        xlabels.push(`<text class="xp-axis" x="${x(i)}" y="${H - 8}" text-anchor="middle">${fmtDay(d)}</text>`);
+      });
+
+      const dots = series.map((v, i) =>
+        `<circle class="xp-dot" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" opacity="0.9"><title>${fmtDay(days[i])} — ${v.toLocaleString()} XP</title></circle>`
+      ).join('');
+
+      return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily XP earned by ${esc(label)} over the last ${n} days">
+        <defs>
+          <linearGradient id="xpGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f0c840" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#f0c840" stop-opacity="0.02"/>
+          </linearGradient>
+        </defs>
+        ${grid.join('')}
+        <path d="${area}" fill="url(#xpGrad)"/>
+        <path d="${line}" fill="none" stroke="#f0c840" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        ${dots}
+        ${xlabels.join('')}
+      </svg>`;
+    }
+
+    // Screen-reader equivalent of the chart.
+    function buildXpTable(days, series, label) {
+      const rows = days.map((d, i) => `<tr><td>${d}</td><td>${series[i].toLocaleString()}</td></tr>`).join('');
+      return `<table class="sr-only"><caption>Daily XP for ${esc(label)}</caption><thead><tr><th>Date</th><th>XP earned</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    document.getElementById('xp-user').addEventListener('change', renderXpChart);
+
+    let xpResizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(xpResizeTimer);
+      xpResizeTimer = setTimeout(() => { if (xpHistory) renderXpChart(); }, 150);
+    });
 
     document.getElementById('refresh-btn').addEventListener('click', loadData);
     loadData();

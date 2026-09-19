@@ -641,6 +641,20 @@ async function setIdentityDisclosed(issueId) {
   await db.collection('issues').doc(issueId).update({ identityDisclosed: true });
 }
 
+// --- Levels / XP ---
+
+// Top `limit` members of a guild by total XP. The `xpByDay` field on each doc
+// (a UTC 'YYYY-MM-DD' -> XP-earned map maintained by awardXP) feeds the
+// dashboard's XP history chart. Uses the existing guildId+xp composite index.
+async function getGuildLevels(guildId, limit = 25) {
+  const snapshot = await db.collection('levels')
+    .where('guildId', '==', guildId)
+    .orderBy('xp', 'desc')
+    .limit(Math.min(limit, 100))
+    .get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
 // --- Feedback (public website) ---
 
 async function saveFeedback(feedbackData) {
@@ -772,4 +786,5 @@ module.exports = {
   listOpenIssuesMissingNumbers: gate('listOpenIssuesMissingNumbers', listOpenIssuesMissingNumbers, emptyArray),
   setIssueNumberIfMissing: gate('setIssueNumberIfMissing', setIssueNumberIfMissing, false),
   appendAdditionalContext: gate('appendAdditionalContext', appendAdditionalContext, nullValue),
+  getGuildLevels: gate('getGuildLevels', getGuildLevels, emptyArray),
 };

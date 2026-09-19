@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **XP history chart on the dashboard.** `awardXP` now maintains an `xpByDay` map on each `levels` doc (UTC day → XP earned), and a new authenticated `GET /api/xp-history?days=&guildId=` endpoint aggregates it into daily guild totals plus per-member series for the top members. The dashboard renders it as a responsive SVG chart with a member selector, loading/empty/error states, hover tooltips, and a screen-reader data table.
+
 ## [2.14.2] - 2026-06-21
 
 ### Security

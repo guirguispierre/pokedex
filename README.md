@@ -23,7 +23,7 @@ Built with discord.js 14, Express 5, Firebase/Firestore, and [OpenRouter](https:
 - **Infraction log** — Warnings persisted per user with reason and moderator
 
 ### Community & engagement
-- **Leveling** — XP per message with cooldown; `/level`, `/leaderboard`
+- **Leveling** — XP per message with cooldown; `/level`, `/leaderboard`; per-day XP history tracked per member
 - **Message graveyard** — tracks deleted messages per user; `/graveyard board` (public) and `/graveyard check`
 - **AFK** — `/afk` sets status; mentions auto-reply with the AFK message
 - **Giveaways** — `/giveaway` with configurable winners and reroll
@@ -37,7 +37,8 @@ Built with discord.js 14, Express 5, Firebase/Firestore, and [OpenRouter](https:
 - **Recipes** — `/recipes` browses the community recipe collection; `autoscrape` can auto-ingest new posts from `#show-and-tell`
 
 ### Dashboard
-- Express REST API at `/api/issues`, `/api/stats`, and `/api/recipes`
+- Express REST API at `/api/issues`, `/api/stats`, `/api/recipes`, and `/api/xp-history`
+- XP history chart on the dashboard — daily XP for the guild or per member, last 30 days
 - Auth via `X-API-Key` header (constant-time compare) with a localhost bypass for development
 - Rate limited to 60 req/min per IP
 - Static frontend in `src/dashboard/public/` (`index.html`, `recipes.html`)

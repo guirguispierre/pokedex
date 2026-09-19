@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const firestore = require('../services/firestore');
+const { buildXpHistory } = require('../services/xpHistory');
 
 const app = express();
 const PORT = process.env.DASHBOARD_PORT || 3000;
@@ -117,6 +118,24 @@ app.get('/api/stats', async (req, res) => {
     res.json(counts);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// API: XP history — daily XP earned per day for the guild, plus per-member
+// series for the top members. Guild defaults to DISCORD_GUILD_ID; pass
+// ?guildId= to override. ?days= controls the window (7–90, default 30).
+app.get('/api/xp-history', async (req, res) => {
+  try {
+    const guildId = req.query.guildId || process.env.DISCORD_GUILD_ID;
+    if (!guildId || typeof guildId !== 'string' || guildId.length > 64) {
+      return res.status(400).json({ error: 'No guild configured. Set DISCORD_GUILD_ID or pass ?guildId=.' });
+    }
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 7), 90);
+    const levels = await firestore.getGuildLevels(guildId, 50);
+    res.json({ guildId, ...buildXpHistory(levels, { days }) });
+  } catch (err) {
+    console.error('XP history API error:', err);
+    res.status(500).json({ error: 'Failed to fetch XP history' });
   }
 });
 
