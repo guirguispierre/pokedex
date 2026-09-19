@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const admin = require('firebase-admin');
 const { getConfig } = require('../config/config');
+const { dayKey, addXpToDay } = require('../services/xpHistory');
 
 // XP cooldown — 1 minute between XP gains per user
 const XP_COOLDOWN = 60_000;
@@ -165,10 +166,12 @@ async function awardXP(message) {
 
   let oldXP = 0;
   let messages = 0;
+  let xpByDay = {};
   if (doc.exists) {
     const data = doc.data();
     oldXP = data.xp || 0;
     messages = data.messages || 0;
+    xpByDay = data.xpByDay || {};
   }
 
   const newXP = oldXP + xpGain;
@@ -181,6 +184,7 @@ async function awardXP(message) {
     xp: newXP,
     messages: messages + 1,
     username: message.author.username,
+    xpByDay: addXpToDay(xpByDay, dayKey(new Date(now)), xpGain),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
