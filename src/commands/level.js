@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, PermissionFlagsBits } = require('discord.js');
 const admin = require('firebase-admin');
 const { getConfig } = require('../config/config');
+const { dayKeyUTC, buildXPChartPoints, renderXPChartPNG } = require('../utils/xpChart');
 
 // XP cooldown — 1 minute between XP gains per user
 const XP_COOLDOWN = 60_000;
@@ -96,7 +97,22 @@ async function handleCheck(interaction) {
     )
     .setTimestamp();
 
-  await interaction.editReply({ embeds: [embed] });
+  const files = [];
+  const points = buildXPChartPoints(data, totalXP);
+  if (points.length >= 2) {
+    try {
+      const png = await renderXPChartPNG(points);
+      files.push(new AttachmentBuilder(png, { name: 'xp-chart.png' }));
+      embed.setImage('attachment://xp-chart.png');
+      embed.setFooter({ text: `XP over the last ${points.length} days` });
+    } catch {
+      // Chart is best effort — still show the stats embed
+    }
+  } else {
+    embed.setFooter({ text: 'XP history builds over time — check back tomorrow' });
+  }
+
+  await interaction.editReply({ embeds: [embed], files });
 }
 
 async function handleTop(interaction) {
@@ -181,6 +197,7 @@ async function awardXP(message) {
     xp: newXP,
     messages: messages + 1,
     username: message.author.username,
+    xpByDay: { [dayKeyUTC(now)]: newXP },
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
