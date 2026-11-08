@@ -10,7 +10,7 @@ async function execute(interaction) {
     .setColor(0x5865f2)
     .setDescription('Pokedex is an open-source Discord bot built for issue tracking, moderation, and community management.')
     .addFields(
-      { name: '👤 Creator', value: '**pierre** (@somevyn)', inline: true },
+      { name: '👤 Creator', value: '**pierre** (@guirguispierre)', inline: true },
       { name: '📦 Open Source', value: 'Contributions welcome!', inline: true },
       { name: '🛠️ Built With', value: 'Discord.js v14 • Firebase • Node.js', inline: false },
     )
@@ -23,9 +23,9 @@ async function execute(interaction) {
       .setURL('https://github.com/guirguispierre/pokedex')
       .setEmoji('🐙'),
     new ButtonBuilder()
-      .setLabel('@somevyn on X')
+      .setLabel('@guirguispierre on X')
       .setStyle(ButtonStyle.Link)
-      .setURL('https://x.com/somevyn')
+      .setURL('https://x.com/guirguispierre')
       .setEmoji('🐦'),
   );
 
