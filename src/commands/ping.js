@@ -33,9 +33,9 @@ async function execute(interaction) {
       .setURL('https://github.com/guirguispierre/pokedex')
       .setEmoji('🐙'),
     new ButtonBuilder()
-      .setLabel('@somevyn')
+      .setLabel('@guirguispierre')
       .setStyle(ButtonStyle.Link)
-      .setURL('https://x.com/somevyn')
+      .setURL('https://x.com/guirguispierre')
       .setEmoji('🐦'),
   );
 
