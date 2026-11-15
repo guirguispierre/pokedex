@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- `/xp-reindex` admin slash command (Manage Server) - recovers XP for messages sent while the bot was offline. It replays the live 1-minute-per-user XP cooldown over Discord message history from the last award before the current start, covering channels and threads. Defaults to `dry_run: true`, which only reports. `since` (e.g. `36h`, `2d`, or a date) widens the scan. Re-running is safe: each level doc stores `lastXPAt` (last award time), so a second run awards nothing. Post-start messages are left to the live path.
+
 ## [2.14.2] - 2026-06-21
 
 ### Security

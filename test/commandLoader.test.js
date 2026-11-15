@@ -12,7 +12,7 @@ const EXPECTED_NAMES = [
   'leaderboard', 'level', 'lock', 'lockall', 'merge', 'mute', 'ping',
   'pokedexbug', 'poll', 'purge', 'raffle', 'reactionrole', 'recipes',
   'serverinfo', 'slowmode', 'starboard', 'status', 'suggest',
-  'unlock', 'unlockall', 'unmute', 'warn', 'welcome',
+  'unlock', 'unlockall', 'unmute', 'warn', 'welcome', 'xp-reindex',
 ].sort();
 
 // Commands that expose an autocomplete handler — must match the old hardcoded subset.

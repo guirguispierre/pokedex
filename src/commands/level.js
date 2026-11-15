@@ -198,6 +198,8 @@ async function awardXP(message) {
     messages: messages + 1,
     username: message.author.username,
     xpByDay: { [dayKeyUTC(now)]: newXP },
+    // Last award time in ms. /xp-reindex uses it as the cooldown anchor.
+    lastXPAt: now,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
@@ -218,4 +220,4 @@ async function awardXP(message) {
   }
 }
 
-module.exports = { data: commandData, execute, awardXP };
+module.exports = { data: commandData, execute, awardXP, getLevelFromXP, XP_COOLDOWN, XP_PER_MESSAGE };
