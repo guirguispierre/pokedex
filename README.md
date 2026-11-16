@@ -2,7 +2,9 @@
 
 A multipurpose Discord bot built around AI-powered issue triage, with moderation, leveling, and community features layered on top. Users report problems via `@mention`, emoji reactions, or forum posts; Pokedex classifies, deduplicates, and routes them to a triage channel so engineers see a clean, prioritized feed instead of scattered messages.
 
-Built with discord.js 14, Express 5, Firebase/Firestore, and [OpenRouter](https://openrouter.ai) for AI classification. CommonJS, Node.js 18+.
+Built with discord.js 14, Express 5, Firebase/Firestore, and [OpenRouter](https://openrouter.ai) for AI classification. CommonJS, Node.js 20.
+
+For config-var-only worker hosting, see [Heroku worker setup](docs/heroku.md).
 
 ## Features
 
@@ -49,7 +51,7 @@ Built with discord.js 14, Express 5, Firebase/Firestore, and [OpenRouter](https:
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20
 - A [Discord bot application](https://discord.com/developers/applications)
 - A [Firebase project](https://console.firebase.google.com) with Firestore enabled
 - An [OpenRouter API key](https://openrouter.ai/keys)

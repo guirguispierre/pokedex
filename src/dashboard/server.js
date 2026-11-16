@@ -5,7 +5,6 @@ const rateLimit = require('express-rate-limit');
 const firestore = require('../services/firestore');
 
 const app = express();
-const PORT = process.env.DASHBOARD_PORT || 3000;
 
 // --- API Authentication ---
 const DASHBOARD_API_KEY = process.env.DASHBOARD_API_KEY || '';
@@ -152,10 +151,19 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-function startDashboard() {
-  app.listen(PORT, '127.0.0.1', () => {
-    console.log(`Dashboard running at http://127.0.0.1:${PORT}`);
+function startDashboard(env = process.env) {
+  if (env.DYNO && !env.DASHBOARD_PORT) return null;
+  const port = Number(env.DASHBOARD_PORT || 3000);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    console.warn('[dashboard] invalid DASHBOARD_PORT; dashboard disabled.');
+    return null;
+  }
+  const server = app.listen(port, '127.0.0.1', (err) => {
+    if (err) return;
+    console.log(`Dashboard running at http://127.0.0.1:${server.address().port}`);
   });
+  server.on('error', () => console.warn('[dashboard] unable to listen; dashboard disabled.'));
+  return server;
 }
 
 module.exports = { startDashboard };
