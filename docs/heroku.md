@@ -2,7 +2,7 @@
 
 The Procfile runs only `worker: node src/index.js`; Discord uses an outbound
 gateway connection, not an HTTP web process. Use the Node.js buildpack. The
-runtime is pinned to Node 20, matching Docker (CI currently tests Node 22/24).
+runtime is pinned to Node 22, matching CI.
 No credential files or `.env` are needed on Heroku.
 
 ## Config vars

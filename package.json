@@ -8,14 +8,14 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test test/*.test.js test/agentTools/*.test.js"
+    "test": "node --test 'test/**/*.test.js'"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "dependencies": {
     "discord.js": "^14.25.1",
