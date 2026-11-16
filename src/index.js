@@ -42,6 +42,7 @@ const {
 const { startDashboard } = require('./dashboard/server');
 const { safeInteractionReply } = require('./utils/safeInteractionReply');
 const { hasOpenRouterConfig } = require('./config/featureGates');
+const { installShutdown } = require('./utils/shutdown');
 
 const client = new Client({
   intents: [
@@ -54,6 +55,8 @@ const client = new Client({
   ],
   partials: [Partials.Message, Partials.Reaction],
 });
+
+installShutdown(client);
 
 function firebaseUnavailableMessage(feature = 'This feature') {
   const reason = firestore.getDisabledReason?.();

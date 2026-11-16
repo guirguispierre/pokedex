@@ -1,31 +1,11 @@
-function clean(value) {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function isFilled(value) {
-  const v = clean(value);
-  if (!v) return false;
-  const normalized = v.toLowerCase();
-  return ![
-    'undefined',
-    'null',
-    'false',
-    'changeme',
-    'change_me',
-    'your_token_here',
-    'your_api_key_here',
-  ].includes(normalized) && !normalized.startsWith('your_');
-}
+const { parseFirebaseCredentials, isFilled } = require('./firebaseCredentials');
 
 function requireEnv(keys, env = process.env) {
   return keys.filter((key) => !isFilled(env[key]));
 }
 
 function hasFirebaseConfig(env = process.env) {
-  const missing = requireEnv(['FIREBASE_PROJECT_ID', 'FIREBASE_CLIENT_EMAIL', 'FIREBASE_PRIVATE_KEY'], env);
-  if (missing.length > 0) return false;
-  const privateKey = clean(env.FIREBASE_PRIVATE_KEY).replace(/\\n/g, '\n');
-  return privateKey.includes('BEGIN PRIVATE KEY') && privateKey.includes('END PRIVATE KEY');
+  return !!parseFirebaseCredentials(env).credentials;
 }
 
 function hasOpenRouterConfig(env = process.env) {
@@ -37,10 +17,7 @@ function hasDiscordConfig(env = process.env) {
 }
 
 function describeMissingFirebase(env = process.env) {
-  const missing = requireEnv(['FIREBASE_PROJECT_ID', 'FIREBASE_CLIENT_EMAIL', 'FIREBASE_PRIVATE_KEY'], env);
-  if (missing.length > 0) return missing;
-  if (!hasFirebaseConfig(env)) return ['FIREBASE_PRIVATE_KEY'];
-  return [];
+  return parseFirebaseCredentials(env).missing;
 }
 
 module.exports = {

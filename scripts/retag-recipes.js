@@ -18,6 +18,7 @@
  *   node scripts/retag-recipes.js --write   # apply changes
  *
  * Requires:
+ *   FIREBASE_SERVICE_ACCOUNT (JSON or base64), or
  *   FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
  *   OPENROUTER_API_KEY
  *   OPENROUTER_MODEL (optional, defaults to 'openai/gpt-4o-mini')
@@ -25,6 +26,7 @@
 
 require('dotenv').config();
 const admin = require('firebase-admin');
+const { parseFirebaseCredentials } = require('../src/config/firebaseCredentials');
 const { extractTags, inferSource } = require('../src/recipes/extractors');
 
 const WRITE = process.argv.includes('--write');
@@ -144,12 +146,10 @@ async function generateTagsForRecipe({ title, description, url, source }) {
 
 function initFirebase() {
   if (admin.apps.length > 0) return;
+  const { credentials, missing } = parseFirebaseCredentials();
+  if (!credentials) throw new Error(`Missing or invalid ${missing.join(', ')}`);
   admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
+    credential: admin.credential.cert(credentials),
   });
 }
 
