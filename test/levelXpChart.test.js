@@ -105,7 +105,12 @@ function makeFakeAdmin(store = new Map()) {
       });
     },
   });
-  const firestore = () => ({ collection: (name) => ({ doc: (id) => docRef(name, id) }) });
+  // awardXP runs in a transaction; reads/writes pass straight through to the refs.
+  const runTransaction = async (fn) => fn({
+    get: (ref) => ref.get(),
+    set: (ref, data, options) => ref.set(data, options),
+  });
+  const firestore = () => ({ collection: (name) => ({ doc: (id) => docRef(name, id) }), runTransaction });
   firestore.FieldValue = { serverTimestamp: () => 'SERVER_TS' };
   return { firestore, _store: store };
 }
