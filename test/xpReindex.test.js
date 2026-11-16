@@ -153,7 +153,7 @@ describe('buildLevelUpdate', () => {
   test('exact plans rewrite xpByDay with running totals; approximate plans do not', () => {
     const awards = [{ ts: CUT - 2 * H, gain: 20 }, { ts: CUT - H, gain: 10 }];
     const exact = buildLevelUpdate({
-      plan: { exact: true, awards, lastAwardMs: CUT - H },
+      plan: { exact: true, xpIsAtAnchor: true, awards, lastAwardMs: CUT - H },
       doc: { xp: 100, messages: 4 }, userId: 'u', guildId: 'g',
     });
     assert.equal(exact.xp, 130);
@@ -161,7 +161,7 @@ describe('buildLevelUpdate', () => {
     assert.equal(exact.lastXPAt, CUT - H);
     assert.ok(exact.xpByDay);
     const approx = buildLevelUpdate({
-      plan: { exact: false, awards, lastAwardMs: CUT - H },
+      plan: { exact: false, xpIsAtAnchor: false, awards, lastAwardMs: CUT - H },
       doc: { xp: 100 }, userId: 'u', guildId: 'g',
     });
     assert.equal(approx.xp, 130);
@@ -231,6 +231,7 @@ function scenario() {
   const source = makeSource('general', [
     msg('m9', CUT - 30 * 60_000, 'carol', 'carol'),   // carol, downtime, after her post-boot award's floor
     msg('m8', CUT + 8 * S, 'carol', 'carol'),          // post-boot: live path owns it
+    msg('m8a', CUT + 5 * S, 'carol', 'carol'),         // the post-boot message live already paid (lastXPAt)
     msg('m7', CUT - H, 'alice', 'alice'),
     msg('m6', CUT - H + 0, 'bob', 'bob'),              // (same ms as alice; order by id only)
     msg('m5', CUT - 2 * H + 10 * S, 'bob', 'bob'),
@@ -275,7 +276,10 @@ describe('runReindex', () => {
     assert.equal(db.store.get('g_alice').lastXPAt, CUT - H);
     assert.equal(db.store.get('g_bob').xp, 30);
     assert.equal(db.store.get('g_carol').xp, 315);
-    assert.equal(db.store.get('g_carol').lastXPAt, CUT - 30 * 60_000);
+    // Post-boot live award stays the anchor; it must never move backwards.
+    assert.equal(db.store.get('g_carol').lastXPAt, CUT + 5 * S);
+    assert.equal(db.store.get('g_carol').lastReplayedXPAt, CUT - 30 * 60_000);
+    assert.equal(db.store.get('g_carol').xpByDay, undefined);
   });
 
   test('running it again awards nothing (no double count)', async () => {
@@ -315,4 +319,38 @@ describe('runReindex', () => {
     assert.equal(r.error, 'scan-timeout');
     assert.equal(db.store.get('g_alice').xp, 500);
   });
+
+  test('after a second restart, messages the live path already paid for are not re-awarded', async () => {
+    const { db, sources } = scenario();
+    await runReindex({ db, guildId: 'g', sources, sinceMs: null, cutoffMs: CUT, dryRun: false, deadlineMs: Infinity, ...CFG });
+    // Live already paid carol at CUT+5s (m8a). Bot restarts before she chats again.
+    const xpBefore = db.store.get('g_carol').xp;
+    const r = await runReindex({ db, guildId: 'g', sources, sinceMs: null, cutoffMs: CUT + H, dryRun: false, deadlineMs: Infinity, ...CFG });
+    assert.equal(r.awardsGranted, 0);
+    assert.equal(db.store.get('g_carol').xp, xpBefore);
+  });
+
+  test('getSources receives the scan start', async () => {
+    const { db, sources } = scenario();
+    let seen;
+    const r = await runReindex({
+      db, guildId: 'g', getSources: async (from) => { seen = from; return sources; },
+      sinceMs: null, cutoffMs: CUT, dryRun: true, deadlineMs: Infinity, ...CFG,
+    });
+    assert.equal(seen, A0);
+    assert.equal(r.awardsGranted, 5);
+  });
 });
+
+describe('scan deadline inside one source', () => {
+  test('a single large channel aborts mid-paging', async () => {
+    const msgs = Array.from({ length: 250 }, (_, i) => msg(String(1000 - i), CUT - (i + 1) * S, 'alice'));
+    let t = 0;
+    const { stats } = await scanGuildMessages({
+      sources: [makeSource('c', msgs)], sinceMs: 0, cutoffMs: CUT, deadlineMs: 1, now: () => t++,
+    });
+    assert.equal(stats.aborted, true);
+    assert.equal(stats.scannedSources, 0);
+  });
+});
+

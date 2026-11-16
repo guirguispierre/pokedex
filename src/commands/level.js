@@ -177,31 +177,32 @@ async function awardXP(message) {
 
   const db = getDb();
   const docRef = db.collection('levels').doc(key);
-  const doc = await docRef.get();
 
-  let oldXP = 0;
-  let messages = 0;
-  if (doc.exists) {
-    const data = doc.data();
-    oldXP = data.xp || 0;
-    messages = data.messages || 0;
-  }
-
-  const newXP = oldXP + xpGain;
-  const oldLevel = getLevelFromXP(oldXP).level;
-  const newLevel = getLevelFromXP(newXP).level;
-
-  await docRef.set({
-    userId,
-    guildId,
-    xp: newXP,
-    messages: messages + 1,
-    username: message.author.username,
-    xpByDay: { [dayKeyUTC(now)]: newXP },
-    // Last award time in ms. /xp-reindex uses it as the cooldown anchor.
-    lastXPAt: now,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
+  // Transaction so a concurrent /xp-reindex apply (also transactional) can't be
+  // clobbered by this read-modify-write, and vice versa.
+  const { oldLevel, newLevel } = await db.runTransaction(async (tx) => {
+    const doc = await tx.get(docRef);
+    let oldXP = 0;
+    let messages = 0;
+    if (doc.exists) {
+      const data = doc.data();
+      oldXP = data.xp || 0;
+      messages = data.messages || 0;
+    }
+    const newXP = oldXP + xpGain;
+    tx.set(docRef, {
+      userId,
+      guildId,
+      xp: newXP,
+      messages: messages + 1,
+      username: message.author.username,
+      xpByDay: { [dayKeyUTC(now)]: newXP },
+      // Last award time in ms. /xp-reindex uses it as the cooldown anchor.
+      lastXPAt: now,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { oldLevel: getLevelFromXP(oldXP).level, newLevel: getLevelFromXP(newXP).level };
+  });
 
   // Announce level up (respects level_announce config)
   const announce = getConfig('level_announce');

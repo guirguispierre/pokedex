@@ -26,13 +26,25 @@ function readLastXPAt(doc) {
   return null;
 }
 
+// Newest known award (live or replayed) strictly before the cutoff, or null.
+// lastXPAt is the live award time and never moves backwards. lastReplayedXPAt is the
+// last award a reindex replayed. For a member who chatted since boot, it is the only
+// pre-boot anchor left, and it keeps an immediate re-run from replaying again.
+function anchorBefore(doc, cutoffMs) {
+  let best = null;
+  for (const t of [readLastXPAt(doc), doc?.lastReplayedXPAt]) {
+    if (typeof t === 'number' && Number.isFinite(t) && t < cutoffMs && (best == null || t > best)) best = t;
+  }
+  return best;
+}
+
 // Largest last-award time that predates the cutoff. This marks the start of the
 // most recent downtime, and it is the default scan start.
 function computeFloor(docs, cutoffMs) {
   let floor = null;
   for (const doc of docs) {
-    const t = readLastXPAt(doc);
-    if (t != null && t < cutoffMs && (floor == null || t > floor)) floor = t;
+    const t = anchorBefore(doc, cutoffMs);
+    if (t != null && (floor == null || t > floor)) floor = t;
   }
   return floor;
 }
@@ -67,8 +79,8 @@ function planUserReplay({
   doc, cutoffMs, scanFromMs, floorMs, timestamps,
   cooldownMs, minGain, maxGain, rng,
 }) {
-  const last = readLastXPAt(doc);
-  const exact = last != null && last < cutoffMs;
+  const last = anchorBefore(doc, cutoffMs);
+  const exact = last != null;
   const base = exact ? last : floorMs;
   const effective = Math.max(base ?? -Infinity, scanFromMs ?? -Infinity);
   const anchorMs = Number.isFinite(effective) ? effective : null;
@@ -77,7 +89,10 @@ function planUserReplay({
   const { awards, lastAwardMs } = replayAwards({
     anchorMs, timestamps: window, cooldownMs, minGain, maxGain, rng,
   });
-  return { exact, anchorMs, awards, lastAwardMs };
+  // doc.xp equals the total at the anchor only if the live path hasn't awarded since boot.
+  const live = readLastXPAt(doc);
+  const xpIsAtAnchor = exact && (live == null || live < cutoffMs);
+  return { exact, xpIsAtAnchor, anchorMs, awards, lastAwardMs };
 }
 
 // Builds the Firestore update for one user's plan. Returns null when nothing is awarded.
@@ -92,10 +107,14 @@ function buildLevelUpdate({ plan, doc, userId, guildId, username }) {
     guildId,
     xp: oldXP + gained,
     messages: (doc?.messages || 0) + plan.awards.length,
-    lastXPAt: plan.lastAwardMs,
+    // Never move the anchor backwards: a post-boot live award is newer than any
+    // replayed downtime award, and losing it would let a later reindex re-award
+    // messages the live path already paid for.
+    lastXPAt: Math.max(readLastXPAt(doc) ?? -Infinity, plan.lastAwardMs),
+    lastReplayedXPAt: plan.lastAwardMs,
   };
   if (username) update.username = username;
-  if (plan.exact) {
+  if (plan.xpIsAtAnchor) {
     let running = oldXP;
     const xpByDay = {};
     for (const a of plan.awards) {
@@ -123,6 +142,11 @@ async function scanGuildMessages({ sources, sinceMs, cutoffMs, deadlineMs, now =
     let done = false;
     try {
       while (!done) {
+        // Checked per page too: one busy channel can outrun the budget on its own.
+        if (now() > deadlineMs) {
+          stats.aborted = true;
+          break;
+        }
         const page = await source.fetchPage(before);
         for (const m of page) {
           if (m.createdTimestamp < sinceMs) { done = true; break; }
@@ -140,6 +164,7 @@ async function scanGuildMessages({ sources, sinceMs, cutoffMs, deadlineMs, now =
         before = page[page.length - 1].id;
         if (page.length < PAGE_SIZE) break;
       }
+      if (stats.aborted) break;
       stats.scannedSources += 1;
     } catch {
       // No access, or the channel was deleted mid-scan. Count it and move on.
@@ -188,7 +213,7 @@ async function mapPool(items, limit, fn) {
 // Full run. With dryRun, nothing is written. The returned summary is the same
 // either way, so a dry run previews an apply.
 async function runReindex({
-  db, guildId, sources, sinceMs, cutoffMs, dryRun = true, deadlineMs,
+  db, guildId, sources, getSources, sinceMs, cutoffMs, dryRun = true, deadlineMs,
   cooldownMs, minGain, maxGain, rng = Math.random, now = Date.now, onProgress,
 }) {
   const levelsSnap = await db.collection(LEVELS).where('guildId', '==', guildId).get();
@@ -198,8 +223,10 @@ async function runReindex({
     return { error: 'no-baseline' };
   }
 
+  // getSources receives the scan start so it can skip threads archived before it.
+  const resolvedSources = getSources ? await getSources(scanFromMs) : sources;
   const { byUser, stats } = await scanGuildMessages({
-    sources, sinceMs: scanFromMs, cutoffMs, deadlineMs, now, onProgress,
+    sources: resolvedSources, sinceMs: scanFromMs, cutoffMs, deadlineMs, now, onProgress,
   });
   if (stats.aborted) return { error: 'scan-timeout', stats };
 
@@ -252,6 +279,7 @@ async function runReindex({
 module.exports = {
   PAGE_SIZE,
   readLastXPAt,
+  anchorBefore,
   computeFloor,
   replayAwards,
   planUserReplay,
